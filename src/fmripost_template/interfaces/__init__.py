@@ -20,7 +20,7 @@
 #
 #     https://www.nipreps.org/community/licensing/
 #
-"""Nipype interfaces for the fMRIPost-template workflow."""
+"""Nipype interfaces for the BDT workflow."""
 
 from . import bids, reportlets
 

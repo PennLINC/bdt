@@ -21,23 +21,23 @@
 #     https://www.nipreps.org/community/licensing/
 #
 r"""
-A Python module to maintain unique, run-wide *fMRIPost-template* settings.
+A Python module to maintain unique, run-wide *BDT* settings.
 
 This module implements the memory structures to keep a consistent, singleton config.
 Settings are passed across processes via filesystem, and a copy of the settings for
 each run and subject is left under
-``<fmriprep_dir>/sub-<participant_id>/log/<run_unique_id>/fmripost_template.toml``.
+``<fmriprep_dir>/sub-<participant_id>/log/<run_unique_id>/bdt.toml``.
 Settings are stored using :abbr:`ToML (Tom's Markup Language)`.
-The module has a :py:func:`~fmripost_template.config.to_filename` function to allow writing out
+The module has a :py:func:`~bdt.config.to_filename` function to allow writing out
 the settings to hard disk in *ToML* format, which looks like:
 
-.. literalinclude:: ../fmripost_template/data/tests/config.toml
+.. literalinclude:: ../bdt/data/tests/config.toml
    :language: toml
-   :name: fmripost_template.toml
-   :caption: **Example file representation of fMRIPost-template settings**.
+   :name: bdt.toml
+   :caption: **Example file representation of BDT settings**.
 
 This config file is used to pass the settings across processes,
-using the :py:func:`~fmripost_template.config.load` function.
+using the :py:func:`~bdt.config.load` function.
 
 Configuration sections
 ----------------------
@@ -57,8 +57,8 @@ graph is built across processes.
 
 .. code-block:: Python
 
-    from fmripost_template import config
-    config_file = config.execution.work_dir / '.fmripost_template.toml'
+    from bdt import config
+    config_file = config.execution.work_dir / '.bdt.toml'
     config.to_filename(config_file)
     # Call build_workflow(config_file, retval) in a subprocess
     with Manager() as mgr:
@@ -98,7 +98,7 @@ _disable_et = bool(os.getenv('NO_ET') is not None or os.getenv('NIPYPE_NO_ET') i
 os.environ['NIPYPE_NO_ET'] = '1'
 os.environ['NO_ET'] = '1'
 
-CONFIG_FILENAME = 'fmripost_template.toml'
+CONFIG_FILENAME = 'bdt.toml'
 
 try:
     set_start_method('forkserver')
@@ -133,7 +133,7 @@ if not any(
     os.environ['PYTHONWARNINGS'] = 'ignore'
 elif os.getenv('FMRIPREP_WARNINGS', '0').lower() in ('1', 'on', 'true', 'y', 'yes'):
     # allow disabling warnings on development versions
-    # https://github.com/nipreps/fmripost_template/pull/2080#discussion_r409118765
+    # https://github.com/nipreps/bdt/pull/2080#discussion_r409118765
     from fmriprep._warnings import logging
 else:
     import logging
@@ -164,7 +164,7 @@ if os.getenv('IS_DOCKER_8395080871'):
     _cgroup = Path('/proc/1/cgroup')
     if _cgroup.exists() and 'docker' in _cgroup.read_text():
         _docker_ver = os.getenv('DOCKER_VERSION_8395080871')
-        _exec_env = 'fmripost_template-docker' if _docker_ver else 'docker'
+        _exec_env = 'bdt-docker' if _docker_ver else 'docker'
     del _cgroup
 
 _fs_license = os.getenv('FS_LICENSE')
@@ -279,7 +279,7 @@ class environment(_Config):
     Read-only options regarding the platform and environment.
 
     Crawls runtime descriptive settings (e.g., default FreeSurfer license,
-    execution environment, nipype and *fMRIPost-template* versions, etc.).
+    execution environment, nipype and *BDT* versions, etc.).
     The ``environment`` section is not loaded in from file,
     only written out when settings are exported.
     This config section is useful when reporting issues,
@@ -305,7 +305,7 @@ class environment(_Config):
     templateflow_version = _tf_ver
     """The TemplateFlow client version installed."""
     version = __version__
-    """*fMRIPost-template*'s version."""
+    """*BDT*'s version."""
 
 
 class nipype(_Config):
@@ -416,7 +416,7 @@ class execution(_Config):
     md_only_boilerplate = False
     """Do not convert boilerplate from MarkDown to LaTex and HTML."""
     notrack = False
-    """Do not collect telemetry information for *fMRIPost-template*."""
+    """Do not collect telemetry information for *BDT*."""
     track_carbon = False
     """Tracks power draws using CodeCarbon package."""
     country_code = 'CAN'
@@ -540,7 +540,7 @@ class workflow(_Config):
     """Configure the particular execution graph of this workflow."""
 
     ignore = None
-    """Ignore particular steps for *fMRIPost-template*."""
+    """Ignore particular steps for *BDT*."""
     cifti_output = None
     """Generate HCP Grayordinates, accepts either ``'91k'`` (default) or ``'170k'``."""
     dummy_scans = None
@@ -665,7 +665,7 @@ def load(filename, skip=None, init=True):
     Arguments
     ---------
     filename : :py:class:`os.PathLike`
-        TOML file containing fMRIPost-template configuration.
+        TOML file containing BDT configuration.
     skip : dict or None
         Sets of values to ignore during load, keyed by section name
     init : `bool` or :py:class:`~collections.abc.Container`

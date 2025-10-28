@@ -1,6 +1,6 @@
 {
-  "title": "fMRIPost-template: a robust postprocessing pipeline for functional MRI",
-  "description": "<p>fMRIPost-template is a robust and easy-to-use pipeline for post-processing preprocessed fMRI data organized in BIDS format.</p>",
+  "title": "BDT: a robust postprocessing pipeline for functional MRI",
+  "description": "<p>BDT is a robust and easy-to-use pipeline for post-processing preprocessed fMRI data organized in BIDS format.</p>",
   "contributors": [
     {
       "affiliation": "Lausanne University Hospital and University of Lausanne, Lausanne, Switzerland",
@@ -31,7 +31,7 @@
   "license": "Apache-2.0",
   "related_identifiers": [
     {
-      "identifier": "https://fmripost_template.org",
+      "identifier": "https://bdt.org",
       "relation": "documents",
       "scheme": "url"
     },

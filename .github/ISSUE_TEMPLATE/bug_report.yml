@@ -27,13 +27,13 @@ body:
   - type: input
     id: version
     attributes:
-      label: What version of fMRIPost-template are you running?
+      label: What version of BDT are you running?
     validations:
       required: true
   - type: dropdown
     id: environment
     attributes:
-      label: How are you running fMRIPost-template?
+      label: How are you running BDT?
       options:
         - Docker
         - Singularity
@@ -59,7 +59,7 @@ body:
       label: Are you reusing any previously computed results?
       description: |
         You can select multiple options.
-        We recommend using a fresh working directory when upgrading to a new fMRIPost-template minor series.
+        We recommend using a fresh working directory when upgrading to a new BDT minor series.
       multiple: true
       options:
         - FreeSurfer

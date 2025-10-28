@@ -26,7 +26,7 @@ The workflow builder factory method.
 All the checks and the construction of the workflow are done
 inside this function that has pickleable inputs and output
 dictionary (``retval``) to allow isolation using a
-``multiprocessing.Process`` that allows fmripost_template to enforce
+``multiprocessing.Process`` that allows bdt to enforce
 a hard-limited memory-scope.
 
 """
@@ -41,9 +41,9 @@ def build_workflow(config_file, retval):
     from niworkflows.utils.bids import collect_participants
     from pkg_resources import resource_filename as pkgrf
 
-    from fmripost_template import config
-    from fmripost_template.reports.core import generate_reports
-    from fmripost_template.workflows.base import init_fmripost_template_wf
+    from bdt import config
+    from bdt.reports.core import generate_reports
+    from bdt.workflows.base import init_bdt_wf
 
     config.load(config_file)
     build_log = config.loggers.workflow
@@ -54,19 +54,19 @@ def build_workflow(config_file, retval):
     retval['return_code'] = 1
     retval['workflow'] = None
 
-    banner = [f'Running fMRIPost-template version {version}']
-    notice_path = Path(pkgrf('fmripost_template', 'data/NOTICE'))
+    banner = [f'Running BDT version {version}']
+    notice_path = Path(pkgrf('bdt', 'data/NOTICE'))
     if notice_path.exists():
         banner[0] += '\n'
         banner += [f'License NOTICE {"#" * 50}']
-        banner += [f'fMRIPost-template {version}']
+        banner += [f'BDT {version}']
         banner += notice_path.read_text().splitlines(keepends=False)[1:]
         banner += ['#' * len(banner[1])]
     build_log.log(25, f'\n{" " * 9}'.join(banner))
 
     # warn if older results exist: check for dataset_description.json in output folder
     msg = check_pipeline_version(
-        'fMRIPost-template',
+        'BDT',
         version,
         output_dir / 'dataset_description.json',
     )
@@ -100,7 +100,7 @@ def build_workflow(config_file, retval):
 
     # Build main workflow
     init_msg = [
-        "Building fMRIPost-template's workflow:",
+        "Building BDT's workflow:",
         f'BIDS dataset path: {config.execution.bids_dir}.',
         f'Participant list: {subject_list}.',
         f'Run identifier: {config.execution.run_uuid}.',
@@ -112,13 +112,13 @@ def build_workflow(config_file, retval):
 
     build_log.log(25, f'\n{" " * 11}* '.join(init_msg))
 
-    retval['workflow'] = init_fmripost_template_wf()
+    retval['workflow'] = init_bdt_wf()
 
     # Check workflow for missing commands
     missing = check_deps(retval['workflow'])
     if missing:
         build_log.critical(
-            'Cannot run fMRIPost-template. Missing dependencies:%s',
+            'Cannot run BDT. Missing dependencies:%s',
             '\n\t* '.join([''] + [f'{cmd} (Interface: {iface})' for iface, cmd in missing]),
         )
         retval['return_code'] = 127  # 127 == command not found.
@@ -126,7 +126,7 @@ def build_workflow(config_file, retval):
 
     config.to_filename(config_file)
     build_log.info(
-        'fMRIPost-template workflow graph with %d nodes built successfully.',
+        'BDT workflow graph with %d nodes built successfully.',
         len(retval['workflow']._get_all_nodes()),
     )
     retval['return_code'] = 0
@@ -135,7 +135,7 @@ def build_workflow(config_file, retval):
 
 def build_boilerplate(config_file, workflow):
     """Write boilerplate in an isolated process."""
-    from fmripost_template import config
+    from bdt import config
 
     config.load(config_file)
     logs_path = config.execution.output_dir / 'logs'
@@ -160,11 +160,11 @@ def build_boilerplate(config_file, workflow):
 
         from pkg_resources import resource_filename as pkgrf
 
-        bib_text = Path(pkgrf('fmripost_template', 'data/boilerplate.bib')).read_text()
+        bib_text = Path(pkgrf('bdt', 'data/boilerplate.bib')).read_text()
         citation_files['bib'].write_text(
             bib_text.replace(
-                'fMRIPost-template <version>',
-                f'fMRIPost-template {config.environment.version}',
+                'BDT <version>',
+                f'BDT {config.environment.version}',
             )
         )
 
@@ -176,7 +176,7 @@ def build_boilerplate(config_file, workflow):
             str(citation_files['bib']),
             '--citeproc',
             '--metadata',
-            'pagetitle="fMRIPost-template citation boilerplate"',
+            'pagetitle="BDT citation boilerplate"',
             str(citation_files['md']),
             '-o',
             str(citation_files['html']),

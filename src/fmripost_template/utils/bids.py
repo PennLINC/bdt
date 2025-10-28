@@ -32,7 +32,7 @@ from bids.layout import BIDSLayout
 from bids.utils import listify
 from niworkflows.utils.spaces import SpatialReferences
 
-from fmripost_template.data import load as load_data
+from bdt.data import load as load_data
 
 
 def extract_entities(file_list: str | list[str]) -> dict:
@@ -306,9 +306,9 @@ def write_derivative_description(input_dir, output_dir, dataset_links=None):
 
     from packaging.version import Version
 
-    from fmripost_template import __version__
+    from bdt import __version__
 
-    DOWNLOAD_URL = f'https://github.com/nipreps/fmripost_template/archive/{__version__}.tar.gz'
+    DOWNLOAD_URL = f'https://github.com/nipreps/bdt/archive/{__version__}.tar.gz'
 
     input_dir = Path(input_dir)
     output_dir = Path(output_dir)
@@ -321,7 +321,7 @@ def write_derivative_description(input_dir, output_dir, dataset_links=None):
         desc = json.load(fobj)
 
     # Update dataset description
-    desc['Name'] = 'fMRIPost-template- ICA-template Postprocessing Outputs'
+    desc['Name'] = 'BDT- ICA-template Postprocessing Outputs'
     desc['BIDSVersion'] = '1.9.0dev'
     desc['DatasetType'] = 'derivative'
     desc['HowToAcknowledge'] = 'Include the generated boilerplate in the methods section.'
@@ -340,27 +340,27 @@ def write_derivative_description(input_dir, output_dir, dataset_links=None):
                 if 'GeneratedBy' in dataset_desc_dict:
                     desc['GeneratedBy'].insert(0, dataset_desc_dict['GeneratedBy'][0])
 
-    # Add GeneratedBy from fMRIPost-template
+    # Add GeneratedBy from BDT
     desc['GeneratedBy'].insert(
         0,
         {
-            'Name': 'fMRIPost-template',
+            'Name': 'BDT',
             'Version': __version__,
             'CodeURL': DOWNLOAD_URL,
         },
     )
 
     # Keys that can only be set by environment
-    if 'FMRIPOST_TEMPLATE_DOCKER_TAG' in os.environ:
+    if 'bdt_DOCKER_TAG' in os.environ:
         desc['GeneratedBy'][0]['Container'] = {
             'Type': 'docker',
-            'Tag': f'nipreps/fmripost_template:{os.environ["FMRIPOST_TEMPLATE_DOCKER_TAG"]}',
+            'Tag': f'nipreps/bdt:{os.environ["bdt_DOCKER_TAG"]}',
         }
 
-    if 'FMRIPOST_TEMPLATE_SINGULARITY_URL' in os.environ:
+    if 'bdt_SINGULARITY_URL' in os.environ:
         desc['GeneratedBy'][0]['Container'] = {
             'Type': 'singularity',
-            'URI': os.getenv('FMRIPOST_TEMPLATE_SINGULARITY_URL'),
+            'URI': os.getenv('bdt_SINGULARITY_URL'),
         }
 
     # Replace local templateflow path with URL

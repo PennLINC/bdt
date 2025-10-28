@@ -24,7 +24,7 @@ from pathlib import Path
 
 from nireports.assembler.report import Report
 
-from fmripost_template import config, data
+from bdt import config, data
 
 
 def run_reports(

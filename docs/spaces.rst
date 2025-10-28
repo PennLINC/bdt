@@ -4,19 +4,19 @@
 
 .. warning::
    Output spaces are not currently supported.
-   fMRIPost-template currently only generates denoised data in MNI152NLin6Asym space.
+   BDT currently only generates denoised data in MNI152NLin6Asym space.
 
 #####################################################################
 Defining standard and nonstandard spaces where data will be resampled
 #####################################################################
 
-The command line interface of *fMRIPost-template* allows resampling the preprocessed data
+The command line interface of *BDT* allows resampling the preprocessed data
 onto other output spaces.
 That is achieved using the ``--output-spaces`` argument, where standard and
 nonstandard spaces can be inserted.
 
 .. important::
-   *fMRIPost-template* will reduce the amount of output spaces to just spaces listed in ``--output-spaces``,
+   *BDT* will reduce the amount of output spaces to just spaces listed in ``--output-spaces``,
    even if other options require resampling the preprocessed data into intermediary spaces.
 
 
@@ -27,11 +27,11 @@ nonstandard spaces can be inserted.
 **************
 
 *TemplateFlow* is a software library and a repository of neuroimaging templates
-that allows end-user applications such as *fMRIPost-template* to flexibly query and pull
+that allows end-user applications such as *BDT* to flexibly query and pull
 template and atlas information.
-In other words, *TemplateFlow* enables *fMRIPost-template* to access a wide range
+In other words, *TemplateFlow* enables *BDT* to access a wide range
 of templates (and also custom templates, see below).
-Therefore, *TemplateFlow* is central to define *fMRIPost-template*'s interface regarding
+Therefore, *TemplateFlow* is central to define *BDT*'s interface regarding
 template and atlas prior-knowledge.
 For more general information about *TemplateFlow*, visit
 `TemplateFlow.org <https://www.templateflow.org>`__.
@@ -41,20 +41,20 @@ For more general information about *TemplateFlow*, visit
 Standard spaces
 ***************
 
-When using *fMRIPost-template* in a workflow that will investigate effects that span across
+When using *BDT* in a workflow that will investigate effects that span across
 analytical groupings, neuroimagers typically resample their data on to a standard,
 stereotactic coordinate system.
 The most extended standard space for fMRI analyses is generally referred to MNI.
-For instance, to instruct *fMRIPost-template* to use the MNI template brain distributed with
+For instance, to instruct *BDT* to use the MNI template brain distributed with
 FSL as coordinate reference the option will read as follows: ``--output-spaces MNI152NLin6Asym``.
-By default, *fMRIPost-template* uses ``MNI152NLin6Asym`` as spatial-standardization reference.
+By default, *BDT* uses ``MNI152NLin6Asym`` as spatial-standardization reference.
 Valid template identifiers (``MNI152NLin6Asym``, ``MNI152NLin2009cAsym``, etc.) come from
 the `TemplateFlow repository <https://github.com/templateflow/templateflow>`__.
 
-Therefore, *fMRIPost-template* will run nonlinear registration processes against the template
+Therefore, *BDT* will run nonlinear registration processes against the template
 T1w image corresponding to all the standard spaces supplied with the argument
 ``--output-spaces``.
-By default, *fMRIPost-template* will resample the preprocessed data on those spaces (labeling the
+By default, *BDT* will resample the preprocessed data on those spaces (labeling the
 corresponding outputs with the `space-<template-identifier>` BIDS entity) but keeping
 the original resolution of the BOLD data to produce smaller files, more consistent with
 the original data gridding.
@@ -106,7 +106,7 @@ modifier would be preferred (i.e., ``fsaverage:den-10k`` for ``fsaverage5``).
 Custom standard spaces
 **********************
 
-To make your custom templates visible by *fMRIPost-template*, and usable via
+To make your custom templates visible by *BDT*, and usable via
 the ``--output-spaces`` argument, please store your template under
 *TemplateFlow*'s home directory.
 The default *TemplateFlow*'s home directory is ``$HOME/.cache/templateflow``
@@ -140,7 +140,7 @@ that do not generate *standardized* coordinate spaces:
   reference generated with the T1w and T2w images available within the
   BIDS structure.
 * ``fsnative``: similarly to the ``anat`` space for volumetric references,
-  including the ``fsnative`` space will instruct *fMRIPost-template* to sample the
+  including the ``fsnative`` space will instruct *BDT* to sample the
   original BOLD data onto FreeSurfer's reconstructed surfaces for this
   individual.
 * ``func``, ``bold``, ``run``, ``boldref`` or ``sbref`` can be used to
@@ -164,7 +164,7 @@ When selecting those modules to be included (using any of the following flags:
 ``--cifti-outputs``, ``--use-syn-sdc``) will modify the list of
 *internal* spaces to include the space identifiers they require, should the
 identifier not be found within the ``--output-spaces`` list already.
-In other words, running *fMRIPost-template* with ``--output-spaces MNI152NLin6Asym:res-2
+In other words, running *BDT* with ``--output-spaces MNI152NLin6Asym:res-2
 --use-syn-sdc`` will expand the list of resampling spaces to be
 ``MNI152NLin6Asym:res-2 MNI152NLin2009cAsym``.
 However, these spaces that are added implicitly will not be saved to
