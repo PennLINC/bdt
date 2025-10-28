@@ -22,7 +22,7 @@
 #
 """Command-line interface tests.
 
-The tests in this file run the full fMRIPost-template workflow on test data
+The tests in this file run the full BDT workflow on test data
 and check the outputs against a list of expected files.
 """
 
@@ -32,21 +32,21 @@ from unittest.mock import patch
 
 import pytest
 
-from fmripost_template.cli import run
-from fmripost_template.cli.parser import parse_args
-from fmripost_template.cli.workflow import build_boilerplate, build_workflow
-from fmripost_template.reports.core import generate_reports
-from fmripost_template.tests.utils import (
+from bdt.cli import run
+from bdt.cli.parser import parse_args
+from bdt.cli.workflow import build_boilerplate, build_workflow
+from bdt.reports.core import generate_reports
+from bdt.tests.utils import (
     check_generated_files,
     download_test_data,
     get_test_data_path,
 )
-from fmripost_template.utils.bids import write_derivative_description
+from bdt.utils.bids import write_derivative_description
 
 
 @pytest.mark.integration
 def test_ds000001(data_dir, output_dir, working_dir):
-    """Run fMRIPost-template on ds000001 fMRIPrep derivatives."""
+    """Run BDT on ds000001 fMRIPrep derivatives."""
     test_name = 'test_ds000001'
 
     fmriprep_dir = download_test_data('ds000001', data_dir)
@@ -66,7 +66,7 @@ def test_ds000001(data_dir, output_dir, working_dir):
 
 
 def _run_and_generate(test_name, parameters, test_main=True):
-    from fmripost_template import config
+    from bdt import config
 
     parameters.append('--clean-workdir')
     parameters.append('--stop-on-first-crash')
@@ -75,7 +75,7 @@ def _run_and_generate(test_name, parameters, test_main=True):
 
     if test_main:
         # This runs, but for some reason doesn't count toward coverage.
-        argv = ['fmripost_template'] + parameters
+        argv = ['bdt'] + parameters
         with patch.object(sys, 'argv', argv):
             with pytest.raises(SystemExit) as e:
                 run.main()

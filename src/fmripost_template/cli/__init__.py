@@ -20,7 +20,7 @@
 #
 #     https://www.nipreps.org/community/licensing/
 #
-"""Command-line interface modules for fMRIPost-template."""
+"""Command-line interface modules for BDT."""
 
 from . import (
     parser,

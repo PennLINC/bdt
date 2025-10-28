@@ -20,7 +20,7 @@
 #
 #     https://www.nipreps.org/community/licensing/
 #
-"""ReportCapableInterfaces for the fMRIPost-template boilerplate."""
+"""ReportCapableInterfaces for the BDT boilerplate."""
 
 import os
 import re
@@ -64,8 +64,8 @@ FUNCTIONAL_TEMPLATE = """\
 """
 
 ABOUT_TEMPLATE = """\t<ul>
-\t\t<li>fMRIPost-template version: {version}</li>
-\t\t<li>fMRIPost-template command: <code>{command}</code></li>
+\t\t<li>BDT version: {version}</li>
+\t\t<li>BDT command: <code>{command}</code></li>
 \t\t<li>Date postprocessed: {date}</li>
 \t</ul>
 </div>

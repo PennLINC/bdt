@@ -20,7 +20,7 @@
 #
 #     https://www.nipreps.org/community/licensing/
 #
-"""fMRIPost-template data files
+"""BDT data files
 
 .. autofunction:: load
 

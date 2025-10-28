@@ -34,7 +34,7 @@ import pytest
 @pytest.fixture(scope='session')
 def data_dir():
     """Grab data directory."""
-    test_data = importlib.resources.files('fmripost_template.tests') / 'data'
+    test_data = importlib.resources.files('bdt.tests') / 'data'
     with importlib.resources.as_file(test_data) as data:
         yield data
 
@@ -56,14 +56,14 @@ def _fslicense(tmp_path_factory):
 
 @pytest.fixture(scope='session')
 def base_config():
-    from fmripost_template.tests.tests import mock_config
+    from bdt.tests.tests import mock_config
 
     return mock_config
 
 
 @pytest.fixture(scope='session')
 def base_ignore_list():
-    """Create the standard ignore list used by fMRIPost-template."""
+    """Create the standard ignore list used by BDT."""
     return [
         'code',
         'stimuli',

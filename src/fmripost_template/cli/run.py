@@ -22,7 +22,7 @@
 #
 """fMRI post-processing template workflow."""
 
-from fmripost_template import config
+from bdt import config
 
 EXITCODE: int = -1
 
@@ -36,9 +36,9 @@ def main():
     from os import EX_SOFTWARE
     from pathlib import Path
 
-    from fmripost_template.cli.parser import parse_args
-    from fmripost_template.cli.workflow import build_workflow
-    from fmripost_template.utils.bids import write_bidsignore, write_derivative_description
+    from bdt.cli.parser import parse_args
+    from bdt.cli.workflow import build_workflow
+    from bdt.utils.bids import write_bidsignore, write_derivative_description
 
     parse_args()
 
@@ -57,7 +57,7 @@ def main():
         tracker.start()
 
     if 'pdb' in config.execution.debug:
-        from fmripost_template.utils.debug import setup_exceptionhook
+        from bdt.utils.debug import setup_exceptionhook
 
         setup_exceptionhook()
         config.nipype.plugin = 'Linear'
@@ -68,7 +68,7 @@ def main():
 
         import sentry_sdk
 
-        from fmripost_template.utils.telemetry import sentry_setup, setup_migas
+        from bdt.utils.telemetry import sentry_setup, setup_migas
 
         sentry_setup()
         setup_migas(init_ping=True)
@@ -100,28 +100,28 @@ def main():
 
     global EXITCODE
     EXITCODE = retval.get('return_code', 0)
-    fmripost_template_wf = retval.get('workflow', None)
+    bdt_wf = retval.get('workflow', None)
 
     # CRITICAL Load the config from the file. This is necessary because the ``build_workflow``
     # function executed constrained in a process may change the config (and thus the global
-    # state of fMRIPost-template).
+    # state of BDT).
     config.load(config_file)
 
     if config.execution.reports_only:
         sys.exit(int(EXITCODE > 0))
 
-    if fmripost_template_wf and config.execution.write_graph:
-        fmripost_template_wf.write_graph(graph2use='colored', format='svg', simple_form=True)
+    if bdt_wf and config.execution.write_graph:
+        bdt_wf.write_graph(graph2use='colored', format='svg', simple_form=True)
 
-    EXITCODE = EXITCODE or (fmripost_template_wf is None) * EX_SOFTWARE
+    EXITCODE = EXITCODE or (bdt_wf is None) * EX_SOFTWARE
     if EXITCODE != 0:
         sys.exit(EXITCODE)
 
     # Generate boilerplate
     with Manager() as mgr:
-        from fmripost_template.cli.workflow import build_boilerplate
+        from bdt.cli.workflow import build_boilerplate
 
-        p = Process(target=build_boilerplate, args=(str(config_file), fmripost_template_wf))
+        p = Process(target=build_boilerplate, args=(str(config_file), bdt_wf))
         p.start()
         p.join()
 
@@ -136,22 +136,22 @@ def main():
         with sentry_sdk.configure_scope() as scope:
             scope.set_tag('run_uuid', config.execution.run_uuid)
             scope.set_tag('npart', len(config.execution.participant_label))
-        sentry_sdk.add_breadcrumb(message='fMRIPost-template started', level='info')
-        sentry_sdk.capture_message('fMRIPost-template started', level='info')
+        sentry_sdk.add_breadcrumb(message='BDT started', level='info')
+        sentry_sdk.capture_message('BDT started', level='info')
 
     config.loggers.workflow.log(
         15,
         '\n'.join(
-            ['fMRIPost-template config:'] + [f'\t\t{s}' for s in config.dumps().splitlines()]
+            ['BDT config:'] + [f'\t\t{s}' for s in config.dumps().splitlines()]
         ),
     )
-    config.loggers.workflow.log(25, 'fMRIPost-template started!')
+    config.loggers.workflow.log(25, 'BDT started!')
     errno = 1  # Default is error exit unless otherwise set
     try:
-        fmripost_template_wf.run(**config.nipype.get_plugin())
+        bdt_wf.run(**config.nipype.get_plugin())
     except Exception as e:
         if not config.execution.notrack:
-            from fmripost_template.utils.telemetry import process_crashfile
+            from bdt.utils.telemetry import process_crashfile
 
             crashfolders = [
                 config.execution.output_dir / f'sub-{s}' / 'log' / config.execution.run_uuid
@@ -164,13 +164,13 @@ def main():
             if sentry_sdk is not None and 'Workflow did not execute cleanly' not in str(e):
                 sentry_sdk.capture_exception(e)
 
-        config.loggers.workflow.critical('fMRIPost-template failed: %s', e)
+        config.loggers.workflow.critical('BDT failed: %s', e)
         raise
 
     else:
-        config.loggers.workflow.log(25, 'fMRIPost-template finished successfully!')
+        config.loggers.workflow.log(25, 'BDT finished successfully!')
         if sentry_sdk is not None:
-            success_message = 'fMRIPost-template finished without errors'
+            success_message = 'BDT finished without errors'
             sentry_sdk.add_breadcrumb(message=success_message, level='info')
             sentry_sdk.capture_message(success_message, level='info')
 
@@ -180,7 +180,7 @@ def main():
             if config.environment.exec_env in (
                 'singularity',
                 'docker',
-                'fmripost_template-docker',
+                'bdt-docker',
             ):
                 boiler_file = Path('<OUTPUT_PATH>') / boiler_file.relative_to(
                     config.execution.output_dir
@@ -188,7 +188,7 @@ def main():
 
             config.loggers.workflow.log(
                 25,
-                'Works derived from this fMRIPost-template execution should include the '
+                'Works derived from this BDT execution should include the '
                 f'boilerplate text found in {boiler_file}.',
             )
 
@@ -208,7 +208,7 @@ def main():
             config.loggers.workflow.log(25, f'Saving logs at: {config.execution.log_dir}')
             config.loggers.workflow.log(25, f'Carbon emissions: {emissions} kg')
 
-        from fmripost_template.reports.core import generate_reports
+        from bdt.reports.core import generate_reports
 
         # Generate reports phase
         failed_reports = generate_reports(
@@ -239,7 +239,7 @@ def migas_exit() -> None:
     """
     import sys
 
-    from fmripost_template.utils.telemetry import send_breadcrumb
+    from bdt.utils.telemetry import send_breadcrumb
 
     global EXITCODE
     migas_kwargs = {'status': 'C'}
@@ -266,6 +266,6 @@ def migas_exit() -> None:
 
 if __name__ == '__main__':
     raise RuntimeError(
-        'fmripost_template/cli/run.py should not be run directly;\n'
-        'Please `pip install` fmripost_template and use the `fmripost_template` command'
+        'bdt/cli/run.py should not be run directly;\n'
+        'Please `pip install` bdt and use the `bdt` command'
     )
