@@ -33,7 +33,6 @@ from bdt import config
 from bdt.interfaces.ants import ApplyTransforms
 from bdt.interfaces.bids import BIDSURI
 from bdt.interfaces.nilearn import IndexImage
-from bdt.utils.doc import fill_doc
 from bdt.utils.utils import get_std2bold_xfms
 
 LOGGER = logging.getLogger('nipype.workflow')

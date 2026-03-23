@@ -31,7 +31,6 @@ from bdt import config
 from bdt.config import dismiss_hash
 from bdt.interfaces.bids import DerivativesDataSink
 from bdt.utils.atlas import select_atlases
-from bdt.utils.doc import fill_doc
 from bdt.workflows.parcellation import init_parcellate_cifti_wf
 
 LOGGER = logging.getLogger('nipype.workflow')
