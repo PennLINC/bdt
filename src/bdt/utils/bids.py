@@ -30,9 +30,12 @@ from pathlib import Path
 
 from bids.layout import BIDSLayout
 from bids.utils import listify
+from nipype import logging
 from niworkflows.utils.spaces import SpatialReferences
 
 from bdt.data import load as load_data
+
+LOGGER = logging.getLogger('nipype.utils')
 
 
 def extract_entities(file_list: str | list[str]) -> dict:
@@ -477,3 +480,122 @@ def validate_input_dir(exec_env, bids_dir, participant_label, need_T1w=True):
             subprocess.check_call(['bids-validator', str(bids_dir), '-c', temp.name])  # noqa: S607
         except FileNotFoundError:
             print('bids-validator does not appear to be installed', file=sys.stderr)
+
+
+def collect_atlases(datasets, atlases, bids_filters=None):
+    """Collect atlases from a list of BIDS-Atlas datasets.
+
+    Selection of labels files and metadata does not leverage the inheritance principle.
+    That probably won't be possible until PyBIDS supports the BIDS-Atlas extension natively.
+
+    Parameters
+    ----------
+    datasets : dict of str:str or str:BIDSLayout pairs
+        Dictionary of BIDS datasets to search for atlases.
+    atlases : list of str
+        List of atlases to collect from across the datasets.
+    bids_filters : dict
+        Additional filters to apply to the BIDS query.
+        Only the "atlas" key is used.
+
+    Returns
+    -------
+    atlas_cache : dict
+        Dictionary of atlases with metadata.
+        Keys are the atlas names, values are dictionaries with keys:
+
+        - "dataset" : str
+            Name of the dataset containing the atlas.
+        - "dataset_path" : str
+            Path to the BIDS dataset containing the atlas.
+        - "image" : str
+            Path to the atlas image.
+        - "labels" : str
+            Path to the atlas labels file.
+        - "metadata" : dict
+            Metadata associated with the atlas.
+    """
+    import json
+
+    import pandas as pd
+    from bids.layout import BIDSLayout
+
+    from bdt.data import load as load_data
+
+    atlas_cfg = load_data('atlas_bids_config.json')
+    bids_filters = bids_filters or {}
+
+    atlas_filter = bids_filters.get('atlas', {})
+    # Hardcoded space and extension for now
+    atlas_filter['extension'] = ['.nii.gz', '.nii']
+    atlas_filter['template'] = 'MNI152NLin6Asym'
+
+    atlas_cache = {}
+    for dataset_name, dataset_path in datasets.items():
+        if not isinstance(dataset_path, BIDSLayout):
+            layout = BIDSLayout(
+                dataset_path,
+                config=['bids', 'derivatives', atlas_cfg],
+                validate=False,
+            )
+        else:
+            layout = dataset_path
+
+        if layout.get_dataset_description().get('DatasetType') != 'derivative':
+            continue
+
+        for atlas in atlases:
+            atlas_images = layout.get(
+                atlas=atlas,
+                **atlas_filter,
+                return_type='file',
+            )
+            if not atlas_images:
+                continue
+            elif len(atlas_images) > 1:
+                bulleted_list = '\n'.join([f'  - {img}' for img in atlas_images])
+                LOGGER.warning(
+                    f'Multiple atlas images found for {atlas} with query {atlas_filter}:\n'
+                    f'{bulleted_list}\nUsing {atlas_images[0]}.'
+                )
+
+            if atlas in atlas_cache:
+                raise ValueError(f"Multiple datasets contain the same atlas '{atlas}'")
+
+            atlas_image = atlas_images[0]
+            atlas_labels = layout.get_nearest(atlas_image, extension='.tsv', strict=False)
+            atlas_metadata_file = layout.get_nearest(atlas_image, extension='.json', strict=True)
+
+            if not atlas_labels:
+                raise FileNotFoundError(f'No TSV file found for {atlas_image}')
+
+            atlas_metadata = None
+            if atlas_metadata_file:
+                with open(atlas_metadata_file) as fobj:
+                    atlas_metadata = json.load(fobj)
+
+            atlas_cache[atlas] = {
+                'dataset': dataset_name,
+                'dataset_path': str(layout._root),
+                'image': atlas_image,
+                'labels': atlas_labels,
+                'metadata': atlas_metadata,
+            }
+
+    for atlas in atlases:
+        if atlas not in atlas_cache:
+            LOGGER.warning(f'No atlas images found for {atlas} with query {atlas_filter}')
+
+    for atlas_info in atlas_cache.values():
+        if not atlas_info['labels']:
+            raise FileNotFoundError(f'No TSV file found for {atlas_info["image"]}')
+
+        # Check the contents of the labels file
+        df = pd.read_table(atlas_info['labels'])
+        if 'name' not in df.columns:
+            raise ValueError(f"'name' column not found in {atlas_info['labels']}")
+
+        if 'index' not in df.columns:
+            raise ValueError(f"'index' column not found in {atlas_info['labels']}")
+
+    return atlas_cache

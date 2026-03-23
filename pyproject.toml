@@ -81,8 +81,7 @@ exclude = [".git_archival.txt"]  # No longer needed in sdist
 [tool.hatch.build.targets.wheel]
 packages = ["src/bdt"]
 exclude = [
-  "src/bdt/tests/data",  # Large test data directory
-  "tests/data", # Large test data directory
+  "test/data",  # Large test data directory
 ]
 
 [tool.coverage.run]
@@ -159,6 +158,7 @@ markers = [
 env = [
     "RUNNING_PYTEST = 1",
 ]
+testpaths = ["test"]
 
 #
 # Pixi configuration (align with ASLPrep pattern)

@@ -174,7 +174,7 @@ jobs:
               --entrypoint pytest \
               pennlinc/bdt:test \
               --cov-append --cov-report term-missing --cov=bdt \
-              bdt/tests
+              test
       - persist_to_workspace:
           root: /tmp/coverage
           paths:

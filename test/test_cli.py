@@ -31,16 +31,16 @@ import sys
 from unittest.mock import patch
 
 import pytest
-
-from bdt.cli import run
-from bdt.cli.parser import parse_args
-from bdt.cli.workflow import build_boilerplate, build_workflow
-from bdt.reports.core import generate_reports
 from bdt.tests.utils import (
     check_generated_files,
     download_test_data,
     get_test_data_path,
 )
+
+from bdt.cli import run
+from bdt.cli.parser import parse_args
+from bdt.cli.workflow import build_boilerplate, build_workflow
+from bdt.reports.core import generate_reports
 from bdt.utils.bids import write_derivative_description
 
 

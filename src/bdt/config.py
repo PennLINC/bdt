@@ -389,8 +389,8 @@ class execution(_Config):
 
     bids_dir = None
     """An existing path to the dataset, which must be BIDS-compliant."""
-    derivatives = {}
-    """Path(s) to search for pre-computed datasets"""
+    atlases = []
+    """Selection of atlases to apply to the data."""
     bids_database_dir = None
     """Path to the directory containing SQLite database indices for the input BIDS dataset."""
     bids_description_hash = None
@@ -399,6 +399,8 @@ class execution(_Config):
     """A dictionary of BIDS selection filters."""
     boilerplate_only = False
     """Only generate a boilerplate."""
+    datasets = {}
+    """Path(s) to search for other datasets (either derivatives or atlases)."""
     sloppy = False
     """Run in sloppy mode (meaning, suboptimal parameters that minimize run-time)."""
     debug = []
@@ -517,8 +519,10 @@ class execution(_Config):
             'input': cls.bids_dir,
             'templateflow': Path(TF_LAYOUT.root),
         }
-        for deriv_name, deriv_path in cls.datasets.items():
-            dataset_links[deriv_name] = deriv_path
+        if cls.atlases:
+            dataset_links['atlas'] = cls.output_dir / 'sourcedata' / 'atlases'
+
+        dataset_links.update(cls.datasets)
         cls.dataset_links = dataset_links
 
         if 'all' in cls.debug:
