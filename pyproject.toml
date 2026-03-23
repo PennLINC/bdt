@@ -1,10 +1,10 @@
 [build-system]
-requires = ["hatchling", "hatch-vcs"]
+requires = ["hatchling", "hatch-vcs", "nipreps-versions"]
 build-backend = "hatchling.build"
 
 [project]
-name = "BDT"
-description = 'A template tool for postprocessing fMRIPrep derivatives'
+name = "bdt"
+description = 'A post-processing BIDS App that ingresses BIDS-Atlas and BIDS Derivative datasets and parcellated selected derivatives with the atlases.'
 readme = "README.rst"
 requires-python = ">=3.10"
 license = {file = "LICENSE"}
@@ -46,7 +46,7 @@ doc = [
     "sphinxcontrib-bibtex",
     "svgutils",
 ]
-test = [
+tests = [
   "coverage",
   "pytest",
   "pytest-cov",
@@ -58,7 +58,7 @@ maint = [
 ]
 
 # Aliases
-all = ["bdt[doc,maint,test]"]
+all = ["bdt[doc,maint,tests]"]
 
 [project.urls]
 Documentation = "https://github.com/nipreps/BDT#readme"
@@ -66,13 +66,14 @@ Issues = "https://github.com/nipreps/BDT/issues"
 Source = "https://github.com/nipreps/BDT"
 
 [project.scripts]
-BDT = "bdt.cli.run:main"
+bdt = "bdt.cli.run:main"
 
 [tool.hatch.metadata]
 allow-direct-references = true
 
 [tool.hatch.version]
 source = "vcs"
+raw-options = { version_scheme = "nipreps-calver" }
 
 [tool.hatch.build.hooks.vcs]
 version-file = "src/bdt/_version.py"
@@ -86,45 +87,6 @@ exclude = [
   "src/bdt/tests/data",  # Large test data directory
   "tests/data", # Large test data directory
 ]
-
-[tool.hatch.envs.default]
-dependencies = [
-  "pytest",
-  "pytest-cov",
-]
-
-[tool.hatch.envs.default.scripts]
-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=src/bdt --cov=tests {args}"
-no-cov = "cov --no-cov {args}"
-
-[tool.hatch.envs.type]
-detached = true
-dependencies = [
-  "mypy",
-  "nibabel",
-  "typer",
-  "pytest",
-]
-
-[tool.hatch.envs.type.scripts]
-check = "mypy . {args}"
-
-[tool.hatch.envs.style]
-detached = true
-dependencies = [
-  "ruff",
-]
-
-[tool.hatch.envs.style.scripts]
-fix = [
-  "ruff check --fix src/",
-]
-check = [
-  "ruff check --diff src/",
-]
-
-[[tool.hatch.envs.test.matrix]]
-python = ["311", "312"]
 
 [tool.coverage.run]
 branch = true
@@ -200,3 +162,38 @@ markers = [
 env = [
     "RUNNING_PYTEST = 1",
 ]
+
+#
+# Pixi configuration (align with ASLPrep pattern)
+#
+
+[tool.pixi.workspace]
+channels = ["https://fsl.fmrib.ox.ac.uk/fsldownloads/fslconda/public", "conda-forge"]
+platforms = ["linux-64"]
+
+[tool.pixi.activation.env]
+FSLDIR = "$CONDA_PREFIX"
+FSLOUTPUTTYPE = "NIFTI_GZ"
+
+[tool.pixi.environments]
+default = { features = ["editable"], solve-group = "default" }
+test = { features = ["editable", "tests"], solve-group = "default" }
+bdt = { features = ["production", "container"], solve-group = "production" }
+
+[tool.pixi.feature.editable.pypi-dependencies]
+bdt = { path = ".", editable = true }
+[tool.pixi.feature.production.pypi-dependencies]
+bdt = { path = ".", editable = false }
+
+[tool.pixi.tasks]
+
+[tool.pixi.pypi-options.dependency-overrides]
+numpy = ">=2.2"
+
+[tool.pixi.dependencies]
+python = "3.12.*"
+nodejs = "20.*"
+
+[tool.pixi.feature.container.dependencies]
+git = "*"
+git-annex = { version = "*", build = "alldep*" }

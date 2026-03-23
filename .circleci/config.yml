@@ -1,0 +1,298 @@
+version: 2.1
+orbs:
+  codecov: codecov/codecov@4.1.0
+
+# ── Reusable anchors ──────────────────────────────────────────────────
+
+_machine_defaults: &machine_defaults
+  environment:
+    TZ: "/usr/share/zoneinfo/America/New_York"
+  machine:
+    image: default
+    docker_layer_caching: true
+  working_directory: /tmp/src/bdt
+  resource_class: large
+
+_docker_auth: &docker_auth
+  name: Docker authentication
+  command: |
+    if [[ -n "$DOCKERHUB_TOKEN" ]]; then
+      echo "$DOCKERHUB_TOKEN" | docker login -u $DOCKERHUB_USERNAME --password-stdin
+    fi
+
+_setup_docker_registry: &setup_docker_registry
+  name: Set up local Docker registry
+  command: |
+    if [[ -f /tmp/images/registry.tar.gz ]]; then
+      echo "Loading saved registry image"
+      docker load < /tmp/images/registry.tar.gz
+    else
+      echo "Pulling registry image from DockerHub"
+      docker pull registry:2
+    fi
+    docker run -d -p 5000:5000 --restart=always --name=registry \
+        -v /tmp/docker:/var/lib/registry registry:2
+
+_pull_test_image: &pull_test_image
+  name: Pull and tag test image from local registry
+  command: |
+    docker pull localhost:5000/bdt-test
+    docker tag localhost:5000/bdt-test pennlinc/bdt:test
+
+# ── Reusable commands ─────────────────────────────────────────────────
+
+commands:
+  restore_build_cache:
+    description: Restore Docker image cache, then start the registry
+    steps:
+      - restore_cache:
+          keys:
+            - build-v4-{{ checksum "Dockerfile" }}-{{ checksum "pixi.lock" }}-{{ .Revision }}
+            - build-v3-{{ checksum "Dockerfile" }}-{{ checksum "pixi.lock" }}
+      - run: *docker_auth
+      - run: *setup_docker_registry
+      - run: *pull_test_image
+
+# ── Jobs ──────────────────────────────────────────────────────────────
+
+jobs:
+  image_prep:
+    <<: *machine_defaults
+    environment:
+      TZ: "/usr/share/zoneinfo/America/New_York"
+      DOCKER_BUILDKIT: "1"
+    steps:
+      - checkout:
+          path: /tmp/src/bdt
+      - restore_cache:
+          keys:
+            - build-v4-{{ checksum "Dockerfile" }}-{{ checksum "pixi.lock" }}-{{ .Revision }}
+            - build-v3-{{ checksum "Dockerfile" }}-{{ checksum "pixi.lock" }}
+      - run: *docker_auth
+      - run: *setup_docker_registry
+      - run:
+          name: Get base image information
+          command: |
+            export BASE_IMAGE=$( grep "BASE_IMAGE=" Dockerfile | head -1 | cut -d= -f2 )
+            export BASE_IMAGE_NAME=${BASE_IMAGE%:*}
+            export BASE_TAG=${BASE_IMAGE#*:}
+            echo "BASE_IMAGE=$BASE_IMAGE" >> $BASH_ENV
+            echo "BASE_IMAGE_NAME=$BASE_IMAGE_NAME" >> $BASH_ENV
+            echo "BASE_TAG=$BASE_TAG" >> $BASH_ENV
+      - run:
+          name: Determine whether test image build is required
+          command: |
+            if [[ -f /tmp/images/imageprep-success.marker ]]; then
+              echo "BUILD_TEST_IMAGE=0" >> "$BASH_ENV"
+            else
+              echo "No successful cached image prep for current Docker inputs; rebuilding test image."
+              echo "BUILD_TEST_IMAGE=1" >> "$BASH_ENV"
+            fi
+      - run:
+          name: Build base image if needed
+          no_output_timeout: 60m
+          command: |
+            if ! docker manifest inspect $BASE_IMAGE > /dev/null 2>&1; then
+              echo "Base image $BASE_IMAGE not found, building..."
+              docker build -f Dockerfile.base \
+                --platform linux/amd64 \
+                -t $BASE_IMAGE \
+                -t $BASE_IMAGE_NAME:latest .
+              echo "BASE_WAS_BUILT=1" >> "$BASH_ENV"
+            else
+              echo "Base image $BASE_IMAGE already exists."
+              echo "BASE_WAS_BUILT=0" >> "$BASH_ENV"
+            fi
+      - run:
+          name: Build Docker image (test)
+          no_output_timeout: 60m
+          command: |
+            if [[ "$BUILD_TEST_IMAGE" == "1" || "$BASE_WAS_BUILT" == "1" ]]; then
+              docker build \
+                --target test \
+                --rm=false \
+                -t pennlinc/bdt:test \
+                --platform linux/amd64 .
+            elif docker image inspect pennlinc/bdt:test > /dev/null 2>&1; then
+              echo "Reusing existing local test image (no Dockerfile/pixi/base-triggered rebuild required)."
+            elif docker pull localhost:5000/bdt-test; then
+              docker tag localhost:5000/bdt-test pennlinc/bdt:test
+              echo "Reusing cached test image from local registry (no Dockerfile/pixi/base-triggered rebuild required)."
+            else
+              echo "No reusable test image found; rebuilding test image."
+              docker build \
+                --target test \
+                --rm=false \
+                -t pennlinc/bdt:test \
+                --platform linux/amd64 .
+            fi
+      - run:
+          name: Verify test image
+          command: docker run --rm --entrypoint pytest pennlinc/bdt:test --version
+      - run:
+          name: Push test image to local registry
+          no_output_timeout: 40m
+          command: |
+            docker tag pennlinc/bdt:test localhost:5000/bdt-test
+            docker push localhost:5000/bdt-test
+      - run:
+          name: Docker registry garbage collection
+          command: |
+            docker exec registry /bin/registry garbage-collect --delete-untagged \
+              /etc/docker/registry/config.yml
+      - run:
+          name: Record successful image prep
+          command: |
+            mkdir -p /tmp/images
+            touch /tmp/images/imageprep-success.marker
+            docker save registry:2 -o /tmp/images/registry.tar.gz
+      - save_cache:
+          key: build-v4-{{ checksum "Dockerfile" }}-{{ checksum "pixi.lock" }}-{{ .Revision }}
+          paths:
+            - /tmp/docker
+            - /tmp/images
+
+  unit_tests:
+    <<: *machine_defaults
+    steps:
+      - checkout:
+          path: /tmp/src/bdt
+      - restore_build_cache
+      - run:
+          name: Run pytest on tests directory
+          no_output_timeout: 1h
+          command: |
+            mkdir -p /tmp/out /tmp/work /tmp/coverage
+            docker run --rm=false \
+              -e CIRCLE_CPUS=2 \
+              -e COVERAGE_FILE=/coverage/.coverage.unit_tests \
+              -v /tmp/src/bdt:/tmp/src/bdt:ro \
+              -v /tmp/out:/out \
+              -v /tmp/work:/work \
+              -v /tmp/coverage:/coverage \
+              -w /tmp/src/bdt \
+              --entrypoint pytest \
+              pennlinc/bdt:test \
+              --cov-append --cov-report term-missing --cov=bdt \
+              bdt/tests
+      - persist_to_workspace:
+          root: /tmp/coverage
+          paths:
+            - .coverage.unit_tests
+      - store_artifacts:
+          path: /tmp/out
+
+  merge_coverage:
+    <<: *machine_defaults
+    steps:
+      - checkout:
+          path: /tmp/src/bdt
+      - attach_workspace:
+          at: /tmp/coverage
+      - run:
+          name: Merge coverage files
+          command: |
+            pyenv local 3
+            pip install coverage
+            cd /tmp/src/bdt
+            coverage combine /tmp/coverage/
+            coverage xml -o /tmp/coverage/coverage.xml
+      - store_artifacts:
+          path: /tmp/coverage
+      - run:
+          name: Quick fix for GPG error in Codecov
+          command: mkdir -p ~/.gnupg
+      - codecov/upload:
+          file: /tmp/coverage/coverage.xml
+
+  build_and_deploy_docker:
+    <<: *machine_defaults
+    environment:
+      TZ: "/usr/share/zoneinfo/America/New_York"
+      DOCKER_BUILDKIT: "1"
+    steps:
+      - checkout:
+          path: /tmp/src/bdt
+      - run: *docker_auth
+      - run:
+          name: Build Docker image (production)
+          no_output_timeout: 3h
+          command: |
+            if [[ -n "$CIRCLE_TAG" ]]; then
+              THISVERSION="$CIRCLE_TAG"
+            else
+              THISVERSION="0+build"
+            fi
+            e=1 && for i in {1..5}; do
+              docker build \
+                --target bdt \
+                --rm=false \
+                -t pennlinc/bdt:latest \
+                --platform linux/amd64 \
+                --build-arg BUILD_DATE="$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+                --build-arg VCS_REF="$(git rev-parse --short HEAD)" \
+                --build-arg VERSION="$THISVERSION" . \
+              && e=0 && break || sleep 15
+            done && [ "$e" -eq "0" ]
+      - run:
+          name: Verify production image
+          command: docker run --rm pennlinc/bdt:latest --version
+      - run:
+          name: Deploy to Docker Hub
+          no_output_timeout: 40m
+          command: |
+            if [[ -n "$DOCKERHUB_TOKEN" ]]; then
+              docker tag pennlinc/bdt:latest pennlinc/bdt:unstable
+              docker push pennlinc/bdt:unstable
+              if [[ -n "$CIRCLE_TAG" ]]; then
+                docker tag pennlinc/bdt:latest pennlinc/bdt:$CIRCLE_TAG
+                docker push pennlinc/bdt:latest
+                docker push pennlinc/bdt:$CIRCLE_TAG
+              fi
+            fi
+
+# ── Workflows ─────────────────────────────────────────────────────────
+
+workflows:
+  version: 2
+  run_tests:
+    jobs:
+      - image_prep:
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - unit_tests:
+          requires:
+            - image_prep
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - merge_coverage:
+          requires:
+            - unit_tests
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - build_and_deploy_docker:
+          requires:
+            - image_prep
+          filters:
+            branches:
+              only: main
+            tags:
+              only: /.*/
