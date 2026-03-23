@@ -141,9 +141,7 @@ def main():
 
     config.loggers.workflow.log(
         15,
-        '\n'.join(
-            ['BDT config:'] + [f'\t\t{s}' for s in config.dumps().splitlines()]
-        ),
+        '\n'.join(['BDT config:'] + [f'\t\t{s}' for s in config.dumps().splitlines()]),
     )
     config.loggers.workflow.log(25, 'BDT started!')
     errno = 1  # Default is error exit unless otherwise set

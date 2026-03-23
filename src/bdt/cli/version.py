@@ -23,7 +23,7 @@
 """Version CLI helpers."""
 
 from contextlib import suppress
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import requests
@@ -41,7 +41,7 @@ def check_latest():
     latest = None
     date = None
     outdated = None
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     cachefile = Path.home() / '.cache' / 'bdt' / 'latest'
     try:
         cachefile.parent.mkdir(parents=True, exist_ok=True)
@@ -56,7 +56,7 @@ def check_latest():
         else:
             try:
                 latest = Version(latest)
-                date = datetime.strptime(date, DATE_FMT).astimezone(timezone.utc)
+                date = datetime.strptime(date, DATE_FMT).astimezone(UTC)
             except (InvalidVersion, ValueError):
                 latest = None
             else:
@@ -66,9 +66,7 @@ def check_latest():
     if latest is None or outdated is True:
         response = None
         with suppress(Exception):
-            response = requests.get(
-                url='https://pypi.org/pypi/bdt/json', timeout=1.0
-            )
+            response = requests.get(url='https://pypi.org/pypi/bdt/json', timeout=1.0)
 
         if response and response.status_code == 200:
             versions = [Version(rel) for rel in response.json()['releases'].keys()]
