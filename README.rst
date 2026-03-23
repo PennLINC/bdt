@@ -41,3 +41,33 @@ For example::
             src-xcpd:stat-reho \
             src-aslprep:stat-cbf:desc-basil \
         --output-formats cifti tsv
+
+**********
+Packaging
+**********
+
+- Docker builds follow ASLPrep’s pixi-based multi-stage pattern:
+
+  - `Dockerfile.base` builds the runtime base (AFNI, Workbench, system libs) and is tagged as ``pennlinc/bdt-base:<YYYYMMDD>``.
+  - `Dockerfile` creates `test` and `bdt` targets from a pixi-managed environment resolved via `pixi.lock`.
+  - Bump the base date tag in `Dockerfile` to trigger a base rebuild in CI when needed.
+
+- Pixi configuration lives in `pyproject.toml` under `[tool.pixi.*]`:
+
+  - Environments: `default` (editable), `test` (editable + tests), and `bdt` (production + container).
+  - Platforms: `linux-64` only; lockfile updates must run on Linux.
+
+- Lockfile management:
+
+  - A GitHub Action `.github/workflows/pixi-lock.yml` updates `pixi.lock` automatically on pull requests that modify `pyproject.toml` or `pixi.lock`.
+  - For fork PRs, the workflow does not push changes; update the lockfile on Linux and push from the contributor branch.
+
+- CircleCI (`.circleci/config.yml`):
+
+  - `image_prep` builds or reuses the `pennlinc/bdt:test` image, keyed by checksums of `Dockerfile` and `pixi.lock`.
+  - `unit_tests` run inside the test image; `build_and_deploy_docker` builds and optionally pushes `pennlinc/bdt:latest` (and tag) on `main`/tags.
+
+Local Docker testing (Linux only)::
+
+    docker build -f Dockerfile.base -t pennlinc/bdt-base:$(date +%Y%m%d) .
+    docker build --target bdt -t pennlinc/bdt:dev .

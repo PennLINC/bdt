@@ -150,9 +150,9 @@ It is released under the
     entities = config.execution.bids_filters or {}
     entities['subject'] = subject_id
 
-    if config.execution.derivatives:
-        # Raw dataset + derivatives dataset
-        config.loggers.workflow.info('Raw+derivatives workflow mode enabled')
+    if config.execution.datasets:
+        # Raw dataset + datasets dataset
+        config.loggers.workflow.info('Raw+datasets workflow mode enabled')
         # Just build a list of BOLD files right now
         subject_data = collect_derivatives(
             raw_dataset=config.execution.layout,
@@ -290,8 +290,8 @@ def init_single_run_wf(bold_file):
         fmapid = config.execution.layout.get_file(fmap_file).entities['to']
 
     functional_cache = defaultdict(list, {})
-    if config.execution.derivatives:
-        # Collect native-space derivatives and transforms
+    if config.execution.datasets:
+        # Collect native-space datasets and transforms
         functional_cache = collect_derivatives(
             raw_dataset=config.execution.layout,
             derivatives_dataset=None,
@@ -300,7 +300,7 @@ def init_single_run_wf(bold_file):
             allow_multiple=False,
             spaces=None,
         )
-        for deriv_dir in config.execution.derivatives.values():
+        for deriv_dir in config.execution.datasets.values():
             functional_cache = update_dict(
                 functional_cache,
                 collect_derivatives(

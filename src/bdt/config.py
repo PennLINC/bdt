@@ -390,7 +390,7 @@ class execution(_Config):
     bids_dir = None
     """An existing path to the dataset, which must be BIDS-compliant."""
     derivatives = {}
-    """Path(s) to search for pre-computed derivatives"""
+    """Path(s) to search for pre-computed datasets"""
     bids_database_dir = None
     """Path to the directory containing SQLite database indices for the input BIDS dataset."""
     bids_description_hash = None
@@ -447,7 +447,7 @@ class execution(_Config):
 
     _paths = (
         'bids_dir',
-        'derivatives',
+        'datasets',
         'bids_database_dir',
         'fs_license_file',
         'layout',
@@ -517,7 +517,7 @@ class execution(_Config):
             'input': cls.bids_dir,
             'templateflow': Path(TF_LAYOUT.root),
         }
-        for deriv_name, deriv_path in cls.derivatives.items():
+        for deriv_name, deriv_path in cls.datasets.items():
             dataset_links[deriv_name] = deriv_path
         cls.dataset_links = dataset_links
 

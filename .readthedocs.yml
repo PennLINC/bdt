@@ -5,7 +5,7 @@ build:
   apt_packages:
     - graphviz
   tools:
-    python: "3.11"
+    python: "3.12"
   jobs:
     post_checkout:
       # Fetch full history, but don't fail if we already have it

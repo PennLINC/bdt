@@ -114,10 +114,7 @@ def _build_parser(**kwargs):
     is_release = not any((currentv.is_devrelease, currentv.is_prerelease, currentv.is_postrelease))
 
     parser = ArgumentParser(
-        description=(
-            'BDT: fMRI POSTprocessing template workflow '
-            f'v{config.environment.version}'
-        ),
+        description=f'BDT: BIDS Derivatives Transformer v{config.environment.version}',
         formatter_class=ArgumentDefaultsHelpFormatter,
         **kwargs,
     )
@@ -194,14 +191,14 @@ def _build_parser(**kwargs):
     )
     g_bids.add_argument(
         '-d',
-        '--derivatives',
+        '--datasets',
         action=ToDict,
         metavar='PACKAGE=PATH',
         nargs='+',
         help=(
             'Search PATH(s) for pre-computed derivatives. '
             'These may be provided as named folders '
-            '(e.g., `--derivatives smriprep=/path/to/smriprep`).'
+            '(e.g., `--datasets smriprep=/path/to/smriprep`).'
         ),
     )
     g_bids.add_argument(
@@ -509,7 +506,7 @@ def parse_args(args=None, namespace=None):
 
     bids_dir = config.execution.bids_dir
     output_dir = config.execution.output_dir
-    derivatives = config.execution.derivatives
+    datasets = config.execution.datasets
     work_dir = config.execution.work_dir
     version = config.environment.version
 
@@ -541,8 +538,8 @@ def parse_args(args=None, namespace=None):
             'Please modify the output path.'
         )
 
-    # Validate raw inputs if running in raw+derivatives mode
-    if derivatives and not opts.skip_bids_validation:
+    # Validate raw inputs if running in raw+datasets mode
+    if datasets and not opts.skip_bids_validation:
         from bdt.utils.bids import validate_input_dir
 
         build_log.info(

@@ -24,7 +24,7 @@ or `Singularity <https://www.nipreps.org/apps/singularity/>`__ subsections.
 External Dependencies
 =====================
 
-*BDT* is written using Python 3.11 (or above), and is based on
+*BDT* is written using Python 3.12 (or above), and is based on
 nipype_.
 
 *BDT* requires some other neuroimaging software tools that are
