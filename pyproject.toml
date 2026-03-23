@@ -6,17 +6,14 @@ build-backend = "hatchling.build"
 name = "bdt"
 description = 'A post-processing BIDS App that ingresses BIDS-Atlas and BIDS Derivative datasets and parcellated selected derivatives with the atlases.'
 readme = "README.rst"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 license = {file = "LICENSE"}
 keywords = []
 authors = [{name = "The NiPreps Developers", email = "nipreps@gmail.com"}]
 classifiers = [
   "Development Status :: 2 - Pre-Alpha",
   "Programming Language :: Python",
-  "Programming Language :: Python :: 3.10",
-  "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
-  "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
   "acres",
