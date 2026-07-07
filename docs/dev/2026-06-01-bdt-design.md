@@ -131,8 +131,9 @@ sources:
     operations: [parcellate_timeseries, functional_connectivity]
     atlases:
       - atlas: HCPMMP1
-      - atlas: Schaefer400
-        desc: 400Parcels17Networks
+      - atlas: Schaefer2018
+        seg: 17networks
+        scale: 400         # BEP 017/atlas: scale- = region count (was desc-400Parcels17Networks)
 
   - suffix: cbf
     datasets: [aslprep]
@@ -188,22 +189,25 @@ operations:
   - name: networkParcels
     operation: intersect
     inputs:
-      - atlas: Schaefer400
-        desc: 400Parcels17Networks
+      - atlas: Schaefer2018
+        seg: 17networks
+        scale: 400         # BEP 017/atlas: scale- = region count (was desc-400Parcels17Networks)
       - atlas: RSN
         desc: networks
     output_entities:
-      atlas: Schaefer400RSN
+      atlas: Schaefer2018RSN
       desc: 400Parcels17NetworksRSN
 
   - name: parcelBundles
     operation: outer_product
     inputs:
-      - atlas: Schaefer400
+      - atlas: Schaefer2018
+        seg: 17networks
+        scale: 400         # BEP 017/atlas: scale- = region count (was desc-400Parcels17Networks)
       - atlas: AFQ
         seg: bundles
     output_entities:
-      atlas: Schaefer400AFQ
+      atlas: Schaefer2018AFQ
 ```
 
 Supported operations: `union`, `intersect`, `outer_product`.
