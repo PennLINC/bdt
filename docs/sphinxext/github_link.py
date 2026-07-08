@@ -85,8 +85,6 @@ def make_linkcode_resolve(package, url_fmt):
     revision = _get_git_revision()
 
     def linkcode_resolve(domain, info):
-        return _linkcode_resolve(
-            domain, info, package=package, url_fmt=url_fmt, revision=revision
-        )
+        return _linkcode_resolve(domain, info, package=package, url_fmt=url_fmt, revision=revision)
 
     return linkcode_resolve
