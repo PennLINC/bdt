@@ -15,6 +15,7 @@ Contents
 
    installation
    usage
+   spec
    workflows
    outputs
    spaces
