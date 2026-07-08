@@ -7,7 +7,8 @@ Installation
 *BDT* should be installed using container technologies.
 
 .. code-block:: bash
-  docker pull nipreps/BDT:main
+
+  docker pull nipreps/bdt:main
 
 
 ************************************************
@@ -24,19 +25,26 @@ or `Singularity <https://www.nipreps.org/apps/singularity/>`__ subsections.
 External Dependencies
 =====================
 
-*BDT* is written using Python 3.12 (or above), and is based on
-nipype_.
+*BDT* is written using Python 3.12, and is based on nipype_.
+The Python environment (nipype, `niworkflows`, `pybids`, and related NiPreps
+libraries) is resolved with `pixi <https://pixi.sh>`__ from ``pixi.lock``.
 
-*BDT* requires some other neuroimaging software tools that are
-not handled by the Python's packaging system (PyPi):
+The container image additionally bundles a small set of neuroimaging tools that
+are not handled by Python's packaging system:
 
-- FSL_ (version 6.0.7.7)
-- ANTs_ (version 2.5.1)
-- AFNI_ (version 24.0.05)
-- `C3D <https://sourceforge.net/projects/c3d/>`_ (version 1.4.0)
-- FreeSurfer_ (version 7.3.2)
-- `bids-validator <https://github.com/bids-standard/bids-validator>`_ (version 1.14.0)
-- `connectome-workbench <https://www.humanconnectome.org/software/connectome-workbench>`_ (version 1.5.0)
+- `Connectome Workbench <https://www.humanconnectome.org/software/connectome-workbench>`_
+  (version 1.5.0) — surface/CIFTI parcellation and label resampling.
+- AFNI_ (a minimal subset of programs, e.g. ``3dresample``, ``3dTshift``).
+- `bids-validator <https://github.com/bids-standard/bids-validator>`_
+  (version 1.14.10, installed via ``npm``).
+
+.. note::
+   The full atlas-transform toolchain described in the design (ANTs
+   ``ApplyTransforms`` for volumetric atlas resampling, and the Rust binaries
+   ``trxrs`` / ``giftirs`` / ``odx`` for streamline, surface, and diffusion-model
+   transforms) is **not yet part of the container image**. These will be added as
+   the corresponding workflows are implemented. If you run *BDT* outside the
+   container, install the tools required by the operations you use.
 
 
 ***********************************************
