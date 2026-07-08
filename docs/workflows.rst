@@ -91,14 +91,8 @@ workflow-build time and used to pick the parcellation tool:
 Example workflow graph
 *******************************
 
-A (very) high-level view of the simplest single-subject pipeline:
-
-.. workflow::
-    :graph2use: orig
-    :simple_form: yes
-
-    from bdt.workflows.tests import mock_config
-    from bdt.workflows.base import init_single_subject_wf
-
-    with mock_config():
-        wf = init_single_subject_wf('01')
+.. note::
+   A rendered graph of the single-subject workflow will be added here once the
+   workflow-build test harness (``mock_config``) and example fixtures are in
+   place. *BDT* is currently pre-alpha and the workflows are still being
+   implemented.

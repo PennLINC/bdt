@@ -26,15 +26,10 @@ A Python module to maintain unique, run-wide *BDT* settings.
 This module implements the memory structures to keep a consistent, singleton config.
 Settings are passed across processes via filesystem, and a copy of the settings for
 each run and subject is left under
-``<fmriprep_dir>/sub-<participant_id>/log/<run_unique_id>/bdt.toml``.
+``<output_dir>/sub-<participant_id>/log/<run_unique_id>/bdt.toml``.
 Settings are stored using :abbr:`ToML (Tom's Markup Language)`.
 The module has a :py:func:`~bdt.config.to_filename` function to allow writing out
-the settings to hard disk in *ToML* format, which looks like:
-
-.. literalinclude:: ../bdt/data/tests/config.toml
-   :language: toml
-   :name: bdt.toml
-   :caption: **Example file representation of BDT settings**.
+the settings to hard disk in *ToML* format.
 
 This config file is used to pass the settings across processes,
 using the :py:func:`~bdt.config.load` function.
