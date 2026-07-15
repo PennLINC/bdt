@@ -48,18 +48,6 @@ def init_bdt_wf():
 
     This workflow organizes the execution of BDT,
     with a sub-workflow for each subject.
-
-    Workflow Graph
-        .. workflow::
-            :graph2use: orig
-            :simple_form: yes
-
-            from bdt.workflows.tests import mock_config
-            from bdt.workflows.base import init_bdt_wf
-
-            with mock_config():
-                wf = init_bdt_wf()
-
     """
     from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 
@@ -93,18 +81,7 @@ def init_single_subject_wf(subject_id: str):
     """Organize the postprocessing pipeline for a single subject.
 
     It collects and reports information about the subject,
-    and prepares sub-workflows to postprocess each BOLD series.
-
-    Workflow Graph
-        .. workflow::
-            :graph2use: orig
-            :simple_form: yes
-
-            from bdt.workflows.tests import mock_config
-            from bdt.workflows.base import init_single_subject_wf
-
-            with mock_config():
-                wf = init_single_subject_wf('01')
+    and prepares sub-workflows to postprocess each source file.
 
     Parameters
     ----------

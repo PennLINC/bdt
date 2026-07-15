@@ -17,3 +17,8 @@
 ..  _SPM: https://www.fil.ion.ucl.ac.uk/spm/software/spm12/
 .. _TACC: https://www.tacc.utexas.edu/
 .. _`citation boilerplate`: https://www.nipreps.org/intro/transparency/#citation-boilerplates
+.. _`BEP 011`: https://github.com/bids-standard/bids-specification/pull/518
+.. _`BEP 012`: https://github.com/bids-standard/bids-specification/pull/519
+.. _`BEP 016`: https://github.com/bids-standard/bids-specification/pull/2211
+.. _`BEP 017`: https://docs.google.com/document/d/1ugBdUF6dhElXdj3u9vw0iWjE6f_Bibsro3ah7sRV0GA/
+.. _`BEP 046`: https://docs.google.com/document/d/1ubDQ2RhgjnfGqoeukzEkPV9YEHhfYMERrj7-3b0c2HI/edit

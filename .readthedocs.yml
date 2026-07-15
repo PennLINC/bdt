@@ -6,17 +6,10 @@ build:
     - graphviz
   tools:
     python: "3.12"
-  jobs:
-    post_checkout:
-      # Fetch full history, but don't fail if we already have it
-      - git fetch --unshallow || true
-
-sphinx:
-  configuration: docs/conf.py
-
-python:
-  install:
-    - method: pip
-      path: .
-      extra_requirements:
-        - doc
+  commands:
+    # Fetch full history so setuptools-scm can determine the version.
+    - git fetch --unshallow || true
+    - pip install .[doc]
+    # Build serially (-j 1). sphinx-argparse's ArgParseDomain does not implement
+    # merge_domaindata, so parallel builds crash during the domain-merge step.
+    - python -m sphinx -T -j 1 -b html -d docs/_build/doctrees docs $READTHEDOCS_OUTPUT/html

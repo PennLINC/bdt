@@ -9,15 +9,22 @@ FAQ - Frequently Asked Questions
     :depth: 1
 
 
-*****************
-What is fMRIPost?
-*****************
+*************************
+What are *BDT* and *BAT*?
+*************************
 
-fMRIPost workflows are BIDS Apps that ingress fMRI preprocessing derivative datasets.
-They fall under the broader umbrella of NiPost workflows,
-which are pipelines that perform post-processing on BIDS-Derivative datasets.
+*BDT* (BIDS Derivatives Transformer) and *BAT* (BIDS Atlas Transformer) are two
+BIDS Apps that ship in the same package.
+*BDT* applies atlases to BIDS derivative datasets, writing out parcellated data
+and connectivity matrices; *BAT* manipulates BIDS Atlas datasets via atlas
+algebra (intersection, union, outer product).
+They fall under the broader umbrella of *NiPost* workflows, which perform
+post-processing on BIDS-Derivative datasets.
 
-These workflows are primarily tested against the outputs of the `fMRIPrep`_ pipeline,
-but we plan to ensure that they can work with derivatives from any pipeline that produces BIDS-Derivative compliant datasets.
+These workflows are designed to work with derivatives from any pipeline that
+produces BIDS-Derivative-compliant datasets, and are primarily tested against
+the outputs of pipelines such as `fMRIPrep`_, `ASLPrep`_, and `QSIRecon`_.
 
 .. _fMRIPrep: https://fmriprep.org
+.. _ASLPrep: https://aslprep.readthedocs.io
+.. _QSIRecon: https://qsirecon.readthedocs.io
