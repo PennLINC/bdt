@@ -133,6 +133,19 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/88/5d/ae275feedaa6590cf6e185cfeb7c4d28b5e1a10fcb492fd5340b07921675/nitime-0.12.1-cp311-abi3-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/fa/71/e399826fda4c9f41bd3b895c7d5612d4eae76269519ea923ece9f798f79f/nitransforms-25.1.0-py3-none-any.whl
       - pypi: git+https://github.com/nipreps/niworkflows.git?rev=master#d991644f3a769d7c84e7c8bb897ea30fb96885df
+      - pypi: https://files.pythonhosted.org/packages/23/e5/127bc63ade1fb875bca3ca3765b60c0821034399362e2a547fe907fcc06a/niwrap-1.0.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/1b/8d/153ffe58728da270ea7290148d67ff6eda20b4ddbd994046ef2a5cc4a381/niwrap_afni-1.0.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/32/54/52c122a37f88a6536a0966798c93363cffec1ab22e0bd81865198946207f/niwrap_ants-1.0.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/04/62/3b70b57497fd8360e906fdf15ef8406f5b14a3dea848f2d06c92d588be59/niwrap_c3d-1.0.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/a3/54/9ce4e0a448c3f5b7ce822b4836dd4d673cd88d0d172a91bf7d919a81de13/niwrap_dcm2niix-1.0.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/dd/08/d1227c5ae67d28b36050f6481a62e1bf78070b4f85a68ef4f35b74bfeb4d/niwrap_fastsurfer-1.0.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/a8/28/e730b7289f8114e4b7f23b82feffed24562733de436595d228800a1a9360/niwrap_freesurfer-1.0.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/67/b9/8036a214137fa7141ba7456b2030fe5a040c24b4e8eaa02547f41f885323/niwrap_fsl-1.0.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/cf/67/a83e950ed8bbb4db924df0594d94b5898763a5df699f3b6282ad412aaa04/niwrap_greedy-1.0.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/2e/12/894f4ac5c381b9ac4f8544ede8953308a9416be7efbe4caea90690765000/niwrap_mrtrix-1.0.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/55/cf/6722ad9ba46d3d615b8e57284438baf7f1962361b8af3e91303321f9ec3a/niwrap_mrtrix3tissue-1.0.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/eb/77/2f1baa9b8424506c35506d5142d5c4b1eeb9f264986f45896e14fe48ffbc/niwrap_niftyreg-1.0.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/38/bd/2b2e77657fcfe462f4e8c93621bd5d3a4d0fe97b279c114859773a431e67/niwrap_workbench-1.0.5-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/d6/5b/545e9267a1cc080c8a1be2746113a063e34bcdd0f5173fd665a5c13cb234/num2words-0.5.14-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/bd/79/cc665495e4d57d0aa6fbcc0aa57aa82671dfc78fbf95fe733ed86d98f52a/numpy-2.4.3-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/8a/24/fc256107d23597fa33d319505ce77160fa1a2349c096d01901ffc7cb7fc4/nvidia_ml_py-13.595.45-py3-none-any.whl
@@ -168,7 +181,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/f4/a2/70401a107d6d7466d64b466927e6b96fcefa99d57494b972608e2f8be50f/scikit_image-0.26.0-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/97/74/b7a304feb2b49df9fafa9382d4d09061a96ee9a9449a7cbea7988dda0828/scikit_learn-1.8.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/01/8e/1e35281b8ab6d5d72ebe9911edcdffa3f36b04ed9d51dec6dd140396e220/scipy-1.17.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
-      - pypi: git+https://github.com/nipreps/sdcflows.git?rev=main#8578e496fd463040288903dd01cd196cb66e6f25
+      - pypi: git+https://github.com/nipreps/sdcflows.git?rev=main#16a6d751256a8b3a35ae10ba807f6b228f53f020
       - pypi: https://files.pythonhosted.org/packages/83/11/00d3c3dfc25ad54e731d91449895a79e4bf2384dc3ac01809010ba88f6d5/seaborn-0.13.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/9d/76/f789f7a86709c6b087c5a2f52f911838cad707cc613162401badc665acfe/setuptools-82.0.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e0/f9/0595336914c5619e5f28a1fb793285925a8cd4b432c9da0a987836c7f822/shellingham-1.5.4-py2.py3-none-any.whl
@@ -176,6 +189,13 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl
       - pypi: git+https://github.com/nipreps/smriprep.git?rev=master#3c76b5bd6c80c84c461ba453f1de54c6c705c476
       - pypi: https://files.pythonhosted.org/packages/37/9a/0c28b6371e0cdcb14f8f1930778cb3123acfcbd2c95bb9cf6b4a2ba0cce3/sqlalchemy-2.0.48-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/e1/cb/b7e9701aa64bcb1a6b8d44f579cacddfaa932677d211d8b7851bca7292f1/styxcontainer_common-0.3.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/c5/d2/c21bb4d6a4f97d4062f85e34a042b019a6d2a8a8609c60d4f38fce0d2d00/styxdefs-0.7.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/c7/54/ef3f68ed7abacb5cc0ccb2e9012dee1bcb76fa5a6147d9d9a3f93bc10e25/styxdocker-0.8.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/2f/3a/72e756530ece580287e39b34a16f6191d820265887034db104c84594d717/styxgraph-0.7.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/65/2b/07936775a725dc35249c4380d8589dc02552e545eac801a0585f8acadd79/styxkit-0.1.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/5a/83/0b9447de0a6efd86858fed9b9cbaf738c12799ca6b0fd8149b186630cda6/styxpodman-0.3.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/cd/6a/538a0febc6bf3ba05d7f5277192f92d3977b01dd52ffe93ed3fafb7d6593/styxsingularity-0.9.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/44/79/0367ebd8a2edfdc46332b90bce1fd183e25078ed1b0d446c6bf42ea7ba7a/svgutils-0.3.4-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/dc/75/e781f7f3257de48f643887226542c491883693555d69dd085849f10e88a9/tedana-26.0.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/a3/5a/ba959887b5343db82ee7f98b36f6f7b7bcdd6c91d52405b7e05ce1f41fd1/templateflow-25.1.2-py3-none-any.whl
@@ -288,6 +308,19 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/88/5d/ae275feedaa6590cf6e185cfeb7c4d28b5e1a10fcb492fd5340b07921675/nitime-0.12.1-cp311-abi3-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/fa/71/e399826fda4c9f41bd3b895c7d5612d4eae76269519ea923ece9f798f79f/nitransforms-25.1.0-py3-none-any.whl
       - pypi: git+https://github.com/nipreps/niworkflows.git?rev=master#d991644f3a769d7c84e7c8bb897ea30fb96885df
+      - pypi: https://files.pythonhosted.org/packages/23/e5/127bc63ade1fb875bca3ca3765b60c0821034399362e2a547fe907fcc06a/niwrap-1.0.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/1b/8d/153ffe58728da270ea7290148d67ff6eda20b4ddbd994046ef2a5cc4a381/niwrap_afni-1.0.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/32/54/52c122a37f88a6536a0966798c93363cffec1ab22e0bd81865198946207f/niwrap_ants-1.0.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/04/62/3b70b57497fd8360e906fdf15ef8406f5b14a3dea848f2d06c92d588be59/niwrap_c3d-1.0.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/a3/54/9ce4e0a448c3f5b7ce822b4836dd4d673cd88d0d172a91bf7d919a81de13/niwrap_dcm2niix-1.0.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/dd/08/d1227c5ae67d28b36050f6481a62e1bf78070b4f85a68ef4f35b74bfeb4d/niwrap_fastsurfer-1.0.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/a8/28/e730b7289f8114e4b7f23b82feffed24562733de436595d228800a1a9360/niwrap_freesurfer-1.0.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/67/b9/8036a214137fa7141ba7456b2030fe5a040c24b4e8eaa02547f41f885323/niwrap_fsl-1.0.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/cf/67/a83e950ed8bbb4db924df0594d94b5898763a5df699f3b6282ad412aaa04/niwrap_greedy-1.0.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/2e/12/894f4ac5c381b9ac4f8544ede8953308a9416be7efbe4caea90690765000/niwrap_mrtrix-1.0.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/55/cf/6722ad9ba46d3d615b8e57284438baf7f1962361b8af3e91303321f9ec3a/niwrap_mrtrix3tissue-1.0.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/eb/77/2f1baa9b8424506c35506d5142d5c4b1eeb9f264986f45896e14fe48ffbc/niwrap_niftyreg-1.0.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/38/bd/2b2e77657fcfe462f4e8c93621bd5d3a4d0fe97b279c114859773a431e67/niwrap_workbench-1.0.5-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/d6/5b/545e9267a1cc080c8a1be2746113a063e34bcdd0f5173fd665a5c13cb234/num2words-0.5.14-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/bd/79/cc665495e4d57d0aa6fbcc0aa57aa82671dfc78fbf95fe733ed86d98f52a/numpy-2.4.3-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/8a/24/fc256107d23597fa33d319505ce77160fa1a2349c096d01901ffc7cb7fc4/nvidia_ml_py-13.595.45-py3-none-any.whl
@@ -323,7 +356,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/f4/a2/70401a107d6d7466d64b466927e6b96fcefa99d57494b972608e2f8be50f/scikit_image-0.26.0-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/97/74/b7a304feb2b49df9fafa9382d4d09061a96ee9a9449a7cbea7988dda0828/scikit_learn-1.8.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/01/8e/1e35281b8ab6d5d72ebe9911edcdffa3f36b04ed9d51dec6dd140396e220/scipy-1.17.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
-      - pypi: git+https://github.com/nipreps/sdcflows.git?rev=main#8578e496fd463040288903dd01cd196cb66e6f25
+      - pypi: git+https://github.com/nipreps/sdcflows.git?rev=main#16a6d751256a8b3a35ae10ba807f6b228f53f020
       - pypi: https://files.pythonhosted.org/packages/83/11/00d3c3dfc25ad54e731d91449895a79e4bf2384dc3ac01809010ba88f6d5/seaborn-0.13.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/9d/76/f789f7a86709c6b087c5a2f52f911838cad707cc613162401badc665acfe/setuptools-82.0.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e0/f9/0595336914c5619e5f28a1fb793285925a8cd4b432c9da0a987836c7f822/shellingham-1.5.4-py2.py3-none-any.whl
@@ -331,6 +364,13 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl
       - pypi: git+https://github.com/nipreps/smriprep.git?rev=master#3c76b5bd6c80c84c461ba453f1de54c6c705c476
       - pypi: https://files.pythonhosted.org/packages/37/9a/0c28b6371e0cdcb14f8f1930778cb3123acfcbd2c95bb9cf6b4a2ba0cce3/sqlalchemy-2.0.48-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/e1/cb/b7e9701aa64bcb1a6b8d44f579cacddfaa932677d211d8b7851bca7292f1/styxcontainer_common-0.3.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/c5/d2/c21bb4d6a4f97d4062f85e34a042b019a6d2a8a8609c60d4f38fce0d2d00/styxdefs-0.7.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/c7/54/ef3f68ed7abacb5cc0ccb2e9012dee1bcb76fa5a6147d9d9a3f93bc10e25/styxdocker-0.8.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/2f/3a/72e756530ece580287e39b34a16f6191d820265887034db104c84594d717/styxgraph-0.7.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/65/2b/07936775a725dc35249c4380d8589dc02552e545eac801a0585f8acadd79/styxkit-0.1.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/5a/83/0b9447de0a6efd86858fed9b9cbaf738c12799ca6b0fd8149b186630cda6/styxpodman-0.3.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/cd/6a/538a0febc6bf3ba05d7f5277192f92d3977b01dd52ffe93ed3fafb7d6593/styxsingularity-0.9.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/44/79/0367ebd8a2edfdc46332b90bce1fd183e25078ed1b0d446c6bf42ea7ba7a/svgutils-0.3.4-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/dc/75/e781f7f3257de48f643887226542c491883693555d69dd085849f10e88a9/tedana-26.0.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/a3/5a/ba959887b5343db82ee7f98b36f6f7b7bcdd6c91d52405b7e05ce1f41fd1/templateflow-25.1.2-py3-none-any.whl
@@ -445,6 +485,19 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/88/5d/ae275feedaa6590cf6e185cfeb7c4d28b5e1a10fcb492fd5340b07921675/nitime-0.12.1-cp311-abi3-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/fa/71/e399826fda4c9f41bd3b895c7d5612d4eae76269519ea923ece9f798f79f/nitransforms-25.1.0-py3-none-any.whl
       - pypi: git+https://github.com/nipreps/niworkflows.git?rev=master#d991644f3a769d7c84e7c8bb897ea30fb96885df
+      - pypi: https://files.pythonhosted.org/packages/23/e5/127bc63ade1fb875bca3ca3765b60c0821034399362e2a547fe907fcc06a/niwrap-1.0.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/1b/8d/153ffe58728da270ea7290148d67ff6eda20b4ddbd994046ef2a5cc4a381/niwrap_afni-1.0.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/32/54/52c122a37f88a6536a0966798c93363cffec1ab22e0bd81865198946207f/niwrap_ants-1.0.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/04/62/3b70b57497fd8360e906fdf15ef8406f5b14a3dea848f2d06c92d588be59/niwrap_c3d-1.0.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/a3/54/9ce4e0a448c3f5b7ce822b4836dd4d673cd88d0d172a91bf7d919a81de13/niwrap_dcm2niix-1.0.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/dd/08/d1227c5ae67d28b36050f6481a62e1bf78070b4f85a68ef4f35b74bfeb4d/niwrap_fastsurfer-1.0.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/a8/28/e730b7289f8114e4b7f23b82feffed24562733de436595d228800a1a9360/niwrap_freesurfer-1.0.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/67/b9/8036a214137fa7141ba7456b2030fe5a040c24b4e8eaa02547f41f885323/niwrap_fsl-1.0.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/cf/67/a83e950ed8bbb4db924df0594d94b5898763a5df699f3b6282ad412aaa04/niwrap_greedy-1.0.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/2e/12/894f4ac5c381b9ac4f8544ede8953308a9416be7efbe4caea90690765000/niwrap_mrtrix-1.0.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/55/cf/6722ad9ba46d3d615b8e57284438baf7f1962361b8af3e91303321f9ec3a/niwrap_mrtrix3tissue-1.0.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/eb/77/2f1baa9b8424506c35506d5142d5c4b1eeb9f264986f45896e14fe48ffbc/niwrap_niftyreg-1.0.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/38/bd/2b2e77657fcfe462f4e8c93621bd5d3a4d0fe97b279c114859773a431e67/niwrap_workbench-1.0.5-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/d6/5b/545e9267a1cc080c8a1be2746113a063e34bcdd0f5173fd665a5c13cb234/num2words-0.5.14-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/bd/79/cc665495e4d57d0aa6fbcc0aa57aa82671dfc78fbf95fe733ed86d98f52a/numpy-2.4.3-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/8a/24/fc256107d23597fa33d319505ce77160fa1a2349c096d01901ffc7cb7fc4/nvidia_ml_py-13.595.45-py3-none-any.whl
@@ -485,7 +538,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/f4/a2/70401a107d6d7466d64b466927e6b96fcefa99d57494b972608e2f8be50f/scikit_image-0.26.0-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/97/74/b7a304feb2b49df9fafa9382d4d09061a96ee9a9449a7cbea7988dda0828/scikit_learn-1.8.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/01/8e/1e35281b8ab6d5d72ebe9911edcdffa3f36b04ed9d51dec6dd140396e220/scipy-1.17.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
-      - pypi: git+https://github.com/nipreps/sdcflows.git?rev=main#8578e496fd463040288903dd01cd196cb66e6f25
+      - pypi: git+https://github.com/nipreps/sdcflows.git?rev=main#16a6d751256a8b3a35ae10ba807f6b228f53f020
       - pypi: https://files.pythonhosted.org/packages/83/11/00d3c3dfc25ad54e731d91449895a79e4bf2384dc3ac01809010ba88f6d5/seaborn-0.13.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/9d/76/f789f7a86709c6b087c5a2f52f911838cad707cc613162401badc665acfe/setuptools-82.0.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e0/f9/0595336914c5619e5f28a1fb793285925a8cd4b432c9da0a987836c7f822/shellingham-1.5.4-py2.py3-none-any.whl
@@ -493,6 +546,13 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl
       - pypi: git+https://github.com/nipreps/smriprep.git?rev=master#3c76b5bd6c80c84c461ba453f1de54c6c705c476
       - pypi: https://files.pythonhosted.org/packages/37/9a/0c28b6371e0cdcb14f8f1930778cb3123acfcbd2c95bb9cf6b4a2ba0cce3/sqlalchemy-2.0.48-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/e1/cb/b7e9701aa64bcb1a6b8d44f579cacddfaa932677d211d8b7851bca7292f1/styxcontainer_common-0.3.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/c5/d2/c21bb4d6a4f97d4062f85e34a042b019a6d2a8a8609c60d4f38fce0d2d00/styxdefs-0.7.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/c7/54/ef3f68ed7abacb5cc0ccb2e9012dee1bcb76fa5a6147d9d9a3f93bc10e25/styxdocker-0.8.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/2f/3a/72e756530ece580287e39b34a16f6191d820265887034db104c84594d717/styxgraph-0.7.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/65/2b/07936775a725dc35249c4380d8589dc02552e545eac801a0585f8acadd79/styxkit-0.1.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/5a/83/0b9447de0a6efd86858fed9b9cbaf738c12799ca6b0fd8149b186630cda6/styxpodman-0.3.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/cd/6a/538a0febc6bf3ba05d7f5277192f92d3977b01dd52ffe93ed3fafb7d6593/styxsingularity-0.9.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/44/79/0367ebd8a2edfdc46332b90bce1fd183e25078ed1b0d446c6bf42ea7ba7a/svgutils-0.3.4-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/dc/75/e781f7f3257de48f643887226542c491883693555d69dd085849f10e88a9/tedana-26.0.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/a3/5a/ba959887b5343db82ee7f98b36f6f7b7bcdd6c91d52405b7e05ce1f41fd1/templateflow-25.1.2-py3-none-any.whl
@@ -624,16 +684,20 @@ packages:
   requires_python: '>=3.9'
 - pypi: ./
   name: bdt
-  version: 26.0.0.dev17+g529287fb2
-  sha256: 3819e60c286298e1197b96921f99e0958b94816999cf985e9451f37eb1eafc0d
+  version: 26.0.0.dev18+g8fc2fab64
+  sha256: 6e5a09ebac12e9b2994075664bd4780d487ab300eaabafef8a1b090678d14108
   requires_dist:
   - acres
   - fmriprep @ git+https://github.com/nipreps/fmriprep.git@master
+  - networkx>=3.0
+  - nilearn>=0.10
   - nipype>=1.8.5
   - nireports @ git+https://github.com/nipreps/nireports.git@main
   - nitransforms>=24.0.2
   - niworkflows @ git+https://github.com/nipreps/niworkflows.git@master
+  - niwrap
   - pybids>=0.15.6
+  - pyyaml
   - sdcflows @ git+https://github.com/nipreps/sdcflows.git@main
   - smriprep @ git+https://github.com/nipreps/smriprep.git@master
   - typer
@@ -675,16 +739,20 @@ packages:
   editable: true
 - pypi: ./
   name: bdt
-  version: 26.0.0.dev17+g529287fb2
-  sha256: 3819e60c286298e1197b96921f99e0958b94816999cf985e9451f37eb1eafc0d
+  version: 26.0.0.dev18+g8fc2fab64
+  sha256: 6e5a09ebac12e9b2994075664bd4780d487ab300eaabafef8a1b090678d14108
   requires_dist:
   - acres
   - fmriprep @ git+https://github.com/nipreps/fmriprep.git@master
+  - networkx>=3.0
+  - nilearn>=0.10
   - nipype>=1.8.5
   - nireports @ git+https://github.com/nipreps/nireports.git@main
   - nitransforms>=24.0.2
   - niworkflows @ git+https://github.com/nipreps/niworkflows.git@master
+  - niwrap
   - pybids>=0.15.6
+  - pyyaml
   - sdcflows @ git+https://github.com/nipreps/sdcflows.git@main
   - smriprep @ git+https://github.com/nipreps/smriprep.git@master
   - typer
@@ -2547,6 +2615,109 @@ packages:
   - pytest-xvfb>=2 ; extra == 'tests'
   - pytest>=8 ; extra == 'tests'
   requires_python: '>=3.12'
+- pypi: https://files.pythonhosted.org/packages/23/e5/127bc63ade1fb875bca3ca3765b60c0821034399362e2a547fe907fcc06a/niwrap-1.0.5-py3-none-any.whl
+  name: niwrap
+  version: 1.0.5
+  sha256: 6cd942740fea3c92efd034336c0d5067a5e03dc4d004303828c9f60b7134a569
+  requires_dist:
+  - styxkit[all]
+  - niwrap-afni==1.0.5
+  - niwrap-ants==1.0.5
+  - niwrap-c3d==1.0.5
+  - niwrap-dcm2niix==1.0.5
+  - niwrap-fastsurfer==1.0.5
+  - niwrap-freesurfer==1.0.5
+  - niwrap-fsl==1.0.5
+  - niwrap-greedy==1.0.5
+  - niwrap-mrtrix==1.0.5
+  - niwrap-mrtrix3tissue==1.0.5
+  - niwrap-niftyreg==1.0.5
+  - niwrap-workbench==1.0.5
+  requires_python: '>=3.10'
+- pypi: https://files.pythonhosted.org/packages/1b/8d/153ffe58728da270ea7290148d67ff6eda20b4ddbd994046ef2a5cc4a381/niwrap_afni-1.0.5-py3-none-any.whl
+  name: niwrap-afni
+  version: 1.0.5
+  sha256: afcfc6890049e01c534af024dd186152b439ddad900ee45e045213f79bc56003
+  requires_dist:
+  - styxdefs>=0.7.0,<0.8.0
+  requires_python: '>=3.10'
+- pypi: https://files.pythonhosted.org/packages/32/54/52c122a37f88a6536a0966798c93363cffec1ab22e0bd81865198946207f/niwrap_ants-1.0.5-py3-none-any.whl
+  name: niwrap-ants
+  version: 1.0.5
+  sha256: 11a78a0493db5c25c049e0a5d29ce6a54cfc012ac380290f61fd5956f3986f4e
+  requires_dist:
+  - styxdefs>=0.7.0,<0.8.0
+  requires_python: '>=3.10'
+- pypi: https://files.pythonhosted.org/packages/04/62/3b70b57497fd8360e906fdf15ef8406f5b14a3dea848f2d06c92d588be59/niwrap_c3d-1.0.5-py3-none-any.whl
+  name: niwrap-c3d
+  version: 1.0.5
+  sha256: 131063450c1ebee3278afc62e1ae916b8a1f40236ab5a65e6c1667964769aea6
+  requires_dist:
+  - styxdefs>=0.7.0,<0.8.0
+  requires_python: '>=3.10'
+- pypi: https://files.pythonhosted.org/packages/a3/54/9ce4e0a448c3f5b7ce822b4836dd4d673cd88d0d172a91bf7d919a81de13/niwrap_dcm2niix-1.0.5-py3-none-any.whl
+  name: niwrap-dcm2niix
+  version: 1.0.5
+  sha256: 630e04791bb10195b9c0996c1ff4767a6423cd7a8de47d2f0f35c6be077fc40a
+  requires_dist:
+  - styxdefs>=0.7.0,<0.8.0
+  requires_python: '>=3.10'
+- pypi: https://files.pythonhosted.org/packages/dd/08/d1227c5ae67d28b36050f6481a62e1bf78070b4f85a68ef4f35b74bfeb4d/niwrap_fastsurfer-1.0.5-py3-none-any.whl
+  name: niwrap-fastsurfer
+  version: 1.0.5
+  sha256: b0f77a7265cc13cf7838077d3fc59a3bd53cd3f03afa8e7fef002d61505a6a07
+  requires_dist:
+  - styxdefs>=0.7.0,<0.8.0
+  requires_python: '>=3.10'
+- pypi: https://files.pythonhosted.org/packages/a8/28/e730b7289f8114e4b7f23b82feffed24562733de436595d228800a1a9360/niwrap_freesurfer-1.0.5-py3-none-any.whl
+  name: niwrap-freesurfer
+  version: 1.0.5
+  sha256: 605c4548f58cf7ae555b2ba6b8c7f8daf045fb40358562e4a3f8f89934cad78d
+  requires_dist:
+  - styxdefs>=0.7.0,<0.8.0
+  requires_python: '>=3.10'
+- pypi: https://files.pythonhosted.org/packages/67/b9/8036a214137fa7141ba7456b2030fe5a040c24b4e8eaa02547f41f885323/niwrap_fsl-1.0.5-py3-none-any.whl
+  name: niwrap-fsl
+  version: 1.0.5
+  sha256: 170a70bb7f5a1ac0bc36810d387951baa28fbbbfb7b109cd4ecd2734c234076c
+  requires_dist:
+  - styxdefs>=0.7.0,<0.8.0
+  requires_python: '>=3.10'
+- pypi: https://files.pythonhosted.org/packages/cf/67/a83e950ed8bbb4db924df0594d94b5898763a5df699f3b6282ad412aaa04/niwrap_greedy-1.0.5-py3-none-any.whl
+  name: niwrap-greedy
+  version: 1.0.5
+  sha256: ba5a707f92d45d5b547a75cd926e0ef58723ab4a134ffda1c538b7a15f9aee34
+  requires_dist:
+  - styxdefs>=0.7.0,<0.8.0
+  requires_python: '>=3.10'
+- pypi: https://files.pythonhosted.org/packages/2e/12/894f4ac5c381b9ac4f8544ede8953308a9416be7efbe4caea90690765000/niwrap_mrtrix-1.0.5-py3-none-any.whl
+  name: niwrap-mrtrix
+  version: 1.0.5
+  sha256: edcb2f312d0b1c8abdf18c77abe3c9993fa600abc2c1f1680df13d67649788ff
+  requires_dist:
+  - styxdefs>=0.7.0,<0.8.0
+  requires_python: '>=3.10'
+- pypi: https://files.pythonhosted.org/packages/55/cf/6722ad9ba46d3d615b8e57284438baf7f1962361b8af3e91303321f9ec3a/niwrap_mrtrix3tissue-1.0.5-py3-none-any.whl
+  name: niwrap-mrtrix3tissue
+  version: 1.0.5
+  sha256: 6a438774052371bd0f776001f2fbef9273d6a3950154066fcc7116c418676ed9
+  requires_dist:
+  - styxdefs>=0.7.0,<0.8.0
+  requires_python: '>=3.10'
+- pypi: https://files.pythonhosted.org/packages/eb/77/2f1baa9b8424506c35506d5142d5c4b1eeb9f264986f45896e14fe48ffbc/niwrap_niftyreg-1.0.5-py3-none-any.whl
+  name: niwrap-niftyreg
+  version: 1.0.5
+  sha256: 0b1e8e2fbb53111108ad5877a7085a0af058fcf3a32c09b0339371d0cf2ebf64
+  requires_dist:
+  - styxdefs>=0.7.0,<0.8.0
+  requires_python: '>=3.10'
+- pypi: https://files.pythonhosted.org/packages/38/bd/2b2e77657fcfe462f4e8c93621bd5d3a4d0fe97b279c114859773a431e67/niwrap_workbench-1.0.5-py3-none-any.whl
+  name: niwrap-workbench
+  version: 1.0.5
+  sha256: 6e3c6aeda389a7956845fd564bfadd3846b6abbf0869bd920a61164770a54abb
+  requires_dist:
+  - styxdefs>=0.7.0,<0.8.0
+  requires_python: '>=3.10'
 - conda: https://conda.anaconda.org/conda-forge/linux-64/nodejs-20.20.1-h44b80ee_0.conda
   sha256: 0ab927eed214006dad5f9bb41224286580cb0105eec2254c72072f86aa3d080e
   md5: a14f1570ed7e303b421567d6333fe1c4
@@ -3370,9 +3541,9 @@ packages:
   - ruff>=0.12.0 ; extra == 'dev'
   - cython-lint>=0.12.2 ; extra == 'dev'
   requires_python: '>=3.11'
-- pypi: git+https://github.com/nipreps/sdcflows.git?rev=main#8578e496fd463040288903dd01cd196cb66e6f25
+- pypi: git+https://github.com/nipreps/sdcflows.git?rev=main#16a6d751256a8b3a35ae10ba807f6b228f53f020
   name: sdcflows
-  version: 26.0.0.dev34+g8578e496f
+  version: 26.0.0.dev44+g16a6d7512
   requires_dist:
   - acres>=0.5.0
   - attrs>=20.1.0
@@ -3665,6 +3836,64 @@ packages:
   purls: []
   size: 203641
   timestamp: 1772818888368
+- pypi: https://files.pythonhosted.org/packages/e1/cb/b7e9701aa64bcb1a6b8d44f579cacddfaa932677d211d8b7851bca7292f1/styxcontainer_common-0.3.0-py3-none-any.whl
+  name: styxcontainer-common
+  version: 0.3.0
+  sha256: 5f90500cf47543b427af63778dacae0518c848f62fac339875016b0a40ba2c8c
+  requires_dist:
+  - styxdefs>=0.7.0,<0.8
+  requires_python: '>=3.10'
+- pypi: https://files.pythonhosted.org/packages/c5/d2/c21bb4d6a4f97d4062f85e34a042b019a6d2a8a8609c60d4f38fce0d2d00/styxdefs-0.7.0-py3-none-any.whl
+  name: styxdefs
+  version: 0.7.0
+  sha256: 54bc020597d60eca5ec6787d07175a7d0a52f25e66f25c1aa3552db797687bf5
+  requires_python: '>=3.10'
+- pypi: https://files.pythonhosted.org/packages/c7/54/ef3f68ed7abacb5cc0ccb2e9012dee1bcb76fa5a6147d9d9a3f93bc10e25/styxdocker-0.8.0-py3-none-any.whl
+  name: styxdocker
+  version: 0.8.0
+  sha256: f6a42827051848217fc95042ee617f50ffbd647202fc5fe1edee6cfd5f48076a
+  requires_dist:
+  - styxdefs>=0.7.0,<0.8
+  - styxcontainer-common>=0.3.0,<0.4
+  requires_python: '>=3.10'
+- pypi: https://files.pythonhosted.org/packages/2f/3a/72e756530ece580287e39b34a16f6191d820265887034db104c84594d717/styxgraph-0.7.0-py3-none-any.whl
+  name: styxgraph
+  version: 0.7.0
+  sha256: ed7fefee8a1f0c9e8d7814809c4c821339b69da60a315be3d63216ae26f73e6e
+  requires_dist:
+  - styxdefs>=0.7.0,<0.8
+  requires_python: '>=3.10'
+- pypi: https://files.pythonhosted.org/packages/65/2b/07936775a725dc35249c4380d8589dc02552e545eac801a0585f8acadd79/styxkit-0.1.0-py3-none-any.whl
+  name: styxkit
+  version: 0.1.0
+  sha256: ae55760dae6e74a0f2f7daedcebf4de54379a3af6cad9f1bd3b5c1e618cffecc
+  requires_dist:
+  - styxdefs>=0.7.0,<0.8
+  - styxdocker ; extra == 'all'
+  - styxpodman ; extra == 'all'
+  - styxsingularity ; extra == 'all'
+  - styxgraph ; extra == 'all'
+  - styxdocker ; extra == 'docker'
+  - styxgraph ; extra == 'graph'
+  - styxpodman ; extra == 'podman'
+  - styxsingularity ; extra == 'singularity'
+  requires_python: '>=3.10'
+- pypi: https://files.pythonhosted.org/packages/5a/83/0b9447de0a6efd86858fed9b9cbaf738c12799ca6b0fd8149b186630cda6/styxpodman-0.3.0-py3-none-any.whl
+  name: styxpodman
+  version: 0.3.0
+  sha256: ad312e4f30ced0916fb80ad32a64064d429e6c61b6d860119d6af012fbcdee9f
+  requires_dist:
+  - styxdefs>=0.7.0,<0.8
+  - styxcontainer-common>=0.3.0,<0.4
+  requires_python: '>=3.10'
+- pypi: https://files.pythonhosted.org/packages/cd/6a/538a0febc6bf3ba05d7f5277192f92d3977b01dd52ffe93ed3fafb7d6593/styxsingularity-0.9.0-py3-none-any.whl
+  name: styxsingularity
+  version: 0.9.0
+  sha256: 07104ddc2d7ce7d7102afc3fbb9cecff2126e746d9124ffc20c99dd192547d4d
+  requires_dist:
+  - styxdefs>=0.7.0,<0.8
+  - styxcontainer-common>=0.3.0,<0.4
+  requires_python: '>=3.10'
 - pypi: https://files.pythonhosted.org/packages/44/79/0367ebd8a2edfdc46332b90bce1fd183e25078ed1b0d446c6bf42ea7ba7a/svgutils-0.3.4-py3-none-any.whl
   name: svgutils
   version: 0.3.4
