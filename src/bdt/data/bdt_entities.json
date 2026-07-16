@@ -1,0 +1,34 @@
+{
+    "name": "bdt",
+    "entities": [
+        {
+            "name": "template",
+            "pattern": "[_/\\\\]+tpl-([a-zA-Z0-9]+)",
+            "directory": "{template}"
+        },
+        {
+            "name": "cohort",
+            "pattern": "[_/\\\\]+cohort-([a-zA-Z0-9]+)"
+        },
+        {
+            "name": "param",
+            "pattern": "[_/\\\\]+param-([a-zA-Z0-9]+)"
+        },
+        {
+            "name": "statistic",
+            "pattern": "[_/\\\\]+stat-([a-zA-Z0-9]+)"
+        },
+        {
+            "name": "scale",
+            "pattern": "[_/\\\\]+scale-([a-zA-Z0-9]+)"
+        },
+        {
+            "name": "measure",
+            "pattern": "[_/\\\\]+meas-([a-zA-Z0-9]+)"
+        },
+        {
+            "name": "threshold",
+            "pattern": "[_/\\\\]+thresh-([a-zA-Z0-9]+)"
+        }
+    ]
+}

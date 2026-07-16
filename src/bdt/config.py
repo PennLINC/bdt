@@ -384,6 +384,8 @@ class execution(_Config):
 
     bids_dir = None
     """An existing path to the dataset, which must be BIDS-compliant."""
+    spec = None
+    """Path to (or pre-packaged name of) the BDT node-graph spec to run."""
     atlases = []
     """Selection of atlases to apply to the data."""
     bids_database_dir = None

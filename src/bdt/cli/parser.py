@@ -196,9 +196,20 @@ def _build_parser(**kwargs):
         metavar='PACKAGE=PATH',
         nargs='+',
         help=(
-            'Search PATH(s) for pre-computed derivatives. '
-            'These may be provided as named folders '
-            '(e.g., `--datasets smriprep=/path/to/smriprep`).'
+            'Search PATH(s) for pre-computed derivatives and atlases. '
+            'These must be provided as named folders '
+            '(e.g., `--datasets smriprep=/path/to/smriprep atlases=/path/to/atlases`); '
+            'the names are what selection nodes reference in the spec.'
+        ),
+    )
+    g_bids.add_argument(
+        '--spec',
+        required=True,
+        action='store',
+        metavar='SPEC',
+        help=(
+            'The BDT node-graph spec: a path to a YAML/JSON file, or the name of a '
+            'pre-packaged spec. Defines the selection and processing nodes to run.'
         ),
     )
     g_bids.add_argument(
