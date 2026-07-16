@@ -110,6 +110,23 @@ class Role:
 
 
 @dataclass(frozen=True)
+class ExtraProduct:
+    """A secondary file a ``write_outputs`` node materializes beyond its primary.
+
+    ``source_field`` is the sub-workflow ``outputnode`` field it comes from (e.g.
+    ``'coverage'``); ``stat`` overrides the ``stat-`` entity for this product.
+    ``cifti_only`` restricts it to CIFTI-valued nodes.  Used for e.g. the
+    ``stat-coverage`` parcel-coverage map that parcellation also emits.
+    """
+
+    source_field: str
+    suffix: str
+    extension: str
+    stat: str | None = None
+    cifti_only: bool = True
+
+
+@dataclass(frozen=True)
 class OutputSpec:
     """How an action's materialized output is named (BIDS suffix/entities/datatype).
 
@@ -118,6 +135,20 @@ class OutputSpec:
     always adds (e.g. ``{'stat': 'mean'}`` for parcellated means).  These values
     are refined per action as each action's real workflow lands; they are enough
     for the engine to compose BIDS-legal output paths today.
+
+    ``suffix``/``extension`` name the canonical (TSV) product.  ``cifti_suffix``/
+    ``cifti_extension``, when set, name the *native CIFTI* product an action also
+    emits when its input is CIFTI (e.g. ``timeseries``/``.ptseries.nii`` for
+    parcellation, ``boldmap``/``.pconn.nii`` for connectivity) — per the
+    2026-07-16 "CIFTI in → CIFTI + TSV out" decision.
+
+    ``preserve_source`` marks a *data-identity-preserving* transform (surface
+    mapping / resampling / scalar parcellation): the output keeps the source's
+    ``suffix``, ``datatype``, and identity entities (``model``/``param``/``stat``/
+    ``desc``), only adding ``atlas-`` and changing geometry — so a parcellated
+    ALFF stays ``stat-alff_boldmap`` and a resampled NODDI stays
+    ``model-noddi_param-*_dwimap``.  ``suffix``/``datatype`` then act as fallbacks
+    when the source lacks them.
     """
 
     suffix: str
@@ -125,6 +156,10 @@ class OutputSpec:
     datatype: str
     primary_role: str | None = None
     entities: dict = None  # fixed extra entities; defaults to {} via __post_init__
+    cifti_suffix: str | None = None
+    cifti_extension: str | None = None
+    extra: tuple[ExtraProduct, ...] = ()  # secondary products (e.g. coverage)
+    preserve_source: bool = False
 
     def __post_init__(self):
         if self.entities is None:
@@ -183,13 +218,27 @@ def _r(
     )
 
 
-def _o(suffix, extension, datatype, primary_role=None, **entities) -> OutputSpec:
+def _o(
+    suffix,
+    extension,
+    datatype,
+    primary_role=None,
+    cifti_suffix=None,
+    cifti_extension=None,
+    extra=(),
+    preserve_source=False,
+    **entities,
+) -> OutputSpec:
     return OutputSpec(
         suffix=suffix,
         extension=extension,
         datatype=datatype,
         primary_role=primary_role,
         entities=entities,
+        cifti_suffix=cifti_suffix,
+        cifti_extension=cifti_extension,
+        extra=tuple(extra),
+        preserve_source=preserve_source,
     )
 
 
@@ -208,7 +257,18 @@ _ACTIONS: tuple[ActionSpec, ...] = (
         'parcellated_timeseries',
         roles=(_r('timeseries', 'timeseries'), _r('atlas', 'atlas')),
         parameters=frozenset({'min_coverage'}),
-        out=_o('timeseries', '.tsv', 'func', primary_role='timeseries', stat='mean'),
+        out=_o(
+            'timeseries',
+            '.tsv',
+            'func',
+            primary_role='timeseries',
+            cifti_suffix='timeseries',
+            cifti_extension='.ptseries.nii',
+            extra=(
+                ExtraProduct('coverage', 'boldmap', '.pscalar.nii', stat='coverage'),
+            ),
+            stat='mean',
+        ),
     ),
     ActionSpec(
         'parcellate_scalar',
@@ -219,7 +279,16 @@ _ACTIONS: tuple[ActionSpec, ...] = (
             _r('atlas', 'atlas'),
         ),
         parameters=frozenset({'min_coverage'}),
-        out=_o('map', '.tsv', 'func', primary_role='scalar', stat='mean'),
+        # Data-identity-preserving: keeps the source suffix/datatype/stat/desc,
+        # just adds atlas- and parcellates (dscalar -> pscalar + tsv).
+        out=_o(
+            'map',
+            '.tsv',
+            'func',
+            primary_role='scalar',
+            cifti_extension='.pscalar.nii',
+            preserve_source=True,
+        ),
     ),
     ActionSpec(
         'functional_connectivity',
@@ -228,7 +297,15 @@ _ACTIONS: tuple[ActionSpec, ...] = (
         # Enforces the spec rule: FC consumes a *parcellated* series, not a dense one.
         roles=(_r('timeseries', 'parcellated_timeseries'),),
         parameters=frozenset({'xdf_covariance'}),
-        out=_o('relmat', '.tsv', 'func', primary_role='timeseries', stat='pearsoncorrelation'),
+        out=_o(
+            'relmat',
+            '.tsv',
+            'func',
+            primary_role='timeseries',
+            cifti_suffix='boldmap',
+            cifti_extension='.pconn.nii',
+            stat='pearsoncorrelation',
+        ),
     ),
     # -- surface mapping + depth profiles (Strategy B / wb_command) --------
     ActionSpec(

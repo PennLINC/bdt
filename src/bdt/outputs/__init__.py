@@ -29,15 +29,19 @@ provenance sidecar (``GeneratedBy`` + ``Sources``).  Dataset-level outputs go to
 resolve to the same path are a hard error.
 """
 
+from bdt.outputs.plan import OutputProduct, build_sink_plan, node_output_entities
 from bdt.outputs.provenance import bids_uri, build_sidecar, generated_by
 from bdt.outputs.sink import DerivativeSink, OutputCollisionError, bids_name, compose_desc
 
 __all__ = (
     'DerivativeSink',
     'OutputCollisionError',
+    'OutputProduct',
     'bids_name',
     'bids_uri',
     'build_sidecar',
+    'build_sink_plan',
     'compose_desc',
     'generated_by',
+    'node_output_entities',
 )

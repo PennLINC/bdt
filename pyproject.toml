@@ -19,7 +19,6 @@ dependencies = [
   "acres",
   "fmriprep @ git+https://github.com/nipreps/fmriprep.git@master",
   "networkx >= 3.0",
-  "niwrap",
   "nipype >= 1.8.5",
   "nireports @ git+https://github.com/nipreps/nireports.git@main",
   "nitransforms >= 24.0.2",

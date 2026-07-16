@@ -52,8 +52,8 @@ def test_bids_name_ordering():
         'map',
         '.tsv',
     )
-    # atlas before stat before den before desc; space before atlas
-    assert name == 'sub-01_space-fsLR_atlas-HCPMMP1_stat-mean_den-32k_desc-x_map.tsv'
+    # space, then den, then atlas, then stat, then desc (2026-07-16 decision)
+    assert name == 'sub-01_space-fsLR_den-32k_atlas-HCPMMP1_stat-mean_desc-x_map.tsv'
 
 
 def test_write_participant(tmp_path):

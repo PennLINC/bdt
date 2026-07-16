@@ -34,11 +34,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Protocol
 
-from bdt.engine.result import NodeResult
-from bdt.outputs.provenance import bids_uri
-from bdt.spec.actions import infer_selection_format
-from bdt.spec.model import Node
-
 
 @dataclass
 class Match:
@@ -112,49 +107,6 @@ def _matches(entities: dict, query: dict) -> bool:
         elif str(have) != str(want):
             return False
     return True
-
-
-def build_selection(
-    node: Node, provider: DataProvider, subject: str | None = None
-) -> list[NodeResult]:
-    """Evaluate a selection node into one :class:`NodeResult` per matched file."""
-    matches = provider.select(node.dataset, node.filters, node.exclude, subject=subject)
-    if not matches:
-        raise SelectionError(
-            f'Selection node {node.name!r} matched no files in dataset {node.dataset!r} '
-            f'with filters {node.filters} (exclude={node.exclude}, subject={subject}).'
-        )
-    if node.action == 'select_atlases':
-        fmt = 'atlas'
-    else:
-        fmt = infer_selection_format(node.filters)
-
-    results = []
-    for m in matches:
-        results.append(
-            NodeResult(
-                node=node.name,
-                action=node.action,
-                fmt=fmt if fmt != 'unknown' else _fmt_from_match(m),
-                files=[m.path],
-                entities=dict(m.entities),
-                sources=[bids_uri(node.dataset, provider.relpath(node.dataset, m.path))],
-                scope=node.scope,
-                space=m.entities.get('space'),
-                dataset=node.dataset,
-            )
-        )
-    return results
-
-
-def _fmt_from_match(match: Match) -> str:
-    """Fall back to inferring a match's format from its own entities."""
-    filt = {
-        k: match.entities[k]
-        for k in ('extension', 'suffix', 'den', 'space')
-        if k in match.entities
-    }
-    return infer_selection_format(filt)
 
 
 class SelectionError(RuntimeError):

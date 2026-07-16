@@ -20,12 +20,13 @@
 #
 #     https://www.nipreps.org/community/licensing/
 #
-"""Pure-Python I/O helpers shared by the parcellation / connectivity builders.
+"""Pure-Python CIFTI / NIfTI tabular helpers.
 
-These do the numeric work that is *not* a Connectome-Workbench call: reading a
+The numeric bits that are *not* a Connectome-Workbench call: reading a
 parcellated CIFTI into a TSV, parcellating a NIfTI with nilearn, and correlating
-a parcel-timeseries TSV.  They are dependency-light (nibabel / nilearn / pandas)
-and unit-testable with small synthetic inputs — no ``wb_command`` required.
+a parcel-timeseries TSV.  Dependency-light (nibabel / nilearn / pandas) and
+unit-testable with small synthetic inputs.  The nipype action factories wrap
+these in ``Function`` nodes / ``SimpleInterface``\\ s.
 """
 
 from __future__ import annotations
@@ -79,8 +80,8 @@ def nifti_parcellate_to_tsv(
     """Parcellate a (3D scalar or 4D timeseries) NIfTI with a label NIfTI atlas.
 
     Uses nilearn's ``NiftiLabelsMasker`` to extract the mean signal per region;
-    assumes the atlas and data already share a grid/space (the cross-space warp is
-    a Strategy-A follow-up).  Columns are the atlas region ids.
+    assumes the atlas and data already share a grid/space.  Columns are the atlas
+    region ids.
     """
     import pandas as pd
     from nilearn.maskers import NiftiLabelsMasker

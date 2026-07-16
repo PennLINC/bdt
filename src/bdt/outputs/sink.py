@@ -39,6 +39,11 @@ from pathlib import Path
 # Canonical short-name entity order for BDT outputs.  ``sub``/``ses`` (participant)
 # and ``space`` (folded into ``tpl-`` for dataset scope) form the leading token and
 # are handled separately in :meth:`DerivativeSink.relpath`.
+#
+# ``res``/``den`` (the grid/mesh qualifiers) sit right after ``space`` and *before*
+# ``atlas``/``stat``, per the 2026-07-16 decision (``space-fsLR_den-91k_atlas-…_stat-…``),
+# matching the refined story 3.1 outputs.  (``model``/``param`` placement for the
+# diffusion ``dwimap`` outputs is a story-3.2 question, revisited when those land.)
 ENTITY_ORDER = (
     'sub',
     'ses',
@@ -52,12 +57,12 @@ ENTITY_ORDER = (
     'param',
     'hemi',
     'space',
+    'res',
+    'den',
     'atlas',
     'seg',
     'stat',
     'scale',
-    'res',
-    'den',
     'label',
     'desc',
 )

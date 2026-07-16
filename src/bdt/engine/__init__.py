@@ -22,34 +22,24 @@
 #
 """BDT node-graph execution engine.
 
-A custom DAG executor over a validated :class:`~bdt.spec.model.Spec`.  It
-topologically orders each scope (``dataset:`` once, then ``nodes:`` per subject),
-resolves each node's ``inputs:`` by declared role (fanning out over list-valued /
-multi-match roles, grouping the rest), dispatches to a per-action builder, and
-materializes ``write_outputs`` nodes through the :mod:`bdt.outputs` sink.
+The engine compiles a validated :class:`~bdt.spec.model.Spec` into a nipype
+``Workflow`` (:func:`bdt.engine.workflow.init_bdt_wf`): selection nodes resolve to
+files via a :class:`~bdt.engine.selection.DataProvider`, and each processing node
+becomes an ``init_<action>_wf`` sub-workflow (:mod:`bdt.engine.factories`) wired by
+declared role.  Running that workflow with nipype gives File(exists) validation,
+content-hash caching, resume, and multiproc/cluster plugins.
 
-The builder layer is the only framework-specific seam: action builders receive
-resolved inputs and return :class:`NodeResult` objects.  A generic passthrough
-builder lets the whole graph run end-to-end before any real (NiWrap) tool
-builders are wired in.
+``bdt.engine.workflow`` / ``bdt.engine.factories`` are imported lazily (they pull
+in nipype); this package's own imports stay light.
 """
 
-from bdt.engine.builders import BUILDERS, register_builder
-from bdt.engine.executor import Executor
-from bdt.engine.pipeline import run_spec
-from bdt.engine.result import BuildContext, NodeResult, RoleValue
-from bdt.engine.selection import DataProvider, DictDataProvider, Match, build_selection
+from bdt.engine.pybids_provider import BIDSDataProvider
+from bdt.engine.selection import DataProvider, DictDataProvider, Match, SelectionError
 
 __all__ = (
-    'BUILDERS',
-    'BuildContext',
+    'BIDSDataProvider',
     'DataProvider',
     'DictDataProvider',
-    'Executor',
     'Match',
-    'NodeResult',
-    'RoleValue',
-    'build_selection',
-    'register_builder',
-    'run_spec',
+    'SelectionError',
 )
