@@ -91,7 +91,7 @@ The old global "warp the atlas, never the data" principle becomes a per-action p
 
 - **Grid / image-resample actions (Strategy A — ANTs `ApplyTransforms`).** `parcellate_timeseries` and `parcellate_scalar` warp the **atlas/label volume into the data's space** with `GenericLabel` interpolation. `resample_subcortical` is the same family but the other direction: it warps the **continuous scalar data onto the fixed standard MNI152NLin6Asym 2mm grayordinate grid** with continuous (linear/spline) interpolation — *not* `GenericLabel` (that would quantize a continuous map). So "Strategy A" means "grid resample via `ApplyTransforms`," in **either** direction — not specifically "atlas into data space."
 - **Point actions (Strategy B).** `map_scalar_to_surface`, `resample_surface_scalar`, `map_scalar_to_streamlines`, `region2region` move the **data's points losslessly** (surface spheres / streamline coordinate warps).
-- **Wrappers inherit their primitive's strategy.** `parcellate_scalar_as_roi` is Strategy A (it parcellates a dseg — warps the ROI dseg into the scalar's space); `parcellate_scalar_as_tract_profile` is Strategy B (it wraps `map_scalar_to_streamlines`).
+- **Wrappers inherit their primitive's strategy.** `parcellate_scalar` is Strategy A (it parcellates a dseg — warps the ROI dseg into the scalar's space); `parcellate_scalar_as_tract_profile` is Strategy B (it wraps `map_scalar_to_streamlines`).
 
 The transform engine must therefore expose **two typed queries** over one graph — an image-resample chain and a point-warp chain — because they traverse the graph in opposite directions and a point warp requires the correctly-named transform to physically exist (it can't be synthesized by inverting a displacement field). See Q5.
 
@@ -151,7 +151,6 @@ Reject bad specs early rather than at build time with a generic "unknown node": 
 | `assemble_cifti` | processing | `surface`, `volume` | dense CIFTI (dscalar/dtseries) | staples cortex surface + subcortex volume |
 | `tractogram_to_dseg` | processing | `tractograms` | dseg atlas | TDI→binarize→label (inline atlas construction) |
 | `map_scalar_to_streamlines` | processing | `scalar`, `streamlines` | annotated TRX (dpv + dps) | sibling of `map_scalar_to_surface`; `per_vertex`→**dpv**, `per_streamline: <stat>`→**dps** |
-| `parcellate_scalar_as_roi` | processing | `scalar`, `atlas` | per-bundle mean (tsv) | wrapper over `parcellate_scalar` on the bundle dseg (Strategy A: warp ROI dseg → scalar space, per-ROI mean) |
 | `parcellate_scalar_as_tract_profile` | processing | `scalar`, `bundles` | per-node profile (tsv) | wrapper: `map_scalar_to_streamlines` (dpv) → n_nodes |
 | `tract2region` | processing | `bundles`, `atlas` | fiber counts per ROI | DSI Studio Tract2Region; optional dps weighting |
 | `region2region` | processing | `streamlines`, `atlas` | region×region relmat(s) | edges weighted by named **dps** (count/sift2/fa/cbf); one node → many matrices |
@@ -351,7 +350,7 @@ nodes:
   dataset: aslprep
   filters: {suffix: cbf, desc: basil}
 - name: cbf_roi
-  action: parcellate_scalar_as_roi
+  action: parcellate_scalar
   inputs: {scalar: load_cbf, atlas: bundle_rois}       # warps ROI dseg -> CBF space
   write_outputs: true
 - name: cbf_profile
@@ -366,7 +365,7 @@ nodes:
   dataset: qsirecon
   filters: {suffix: dwimap, model: tensor, param: fa, space: ACPC}
 - name: fa_roi
-  action: parcellate_scalar_as_roi
+  action: parcellate_scalar
   inputs: {scalar: load_fa, atlas: bundle_rois}
   write_outputs: true
 - name: fa_profile
@@ -376,7 +375,7 @@ nodes:
   write_outputs: true
 ```
 
-`parcellate_scalar_as_tract_profile` is a wrapper over `map_scalar_to_streamlines` (dpv → n_nodes, Strategy B). `parcellate_scalar_as_roi` is *not*: it parcellates the bundle **dseg** built by `tractogram_to_dseg` (Strategy A — warp the ROI dseg into the scalar's space, per-ROI mean), which is why its `atlas` role takes `bundle_rois`. See §3.6 and Q7.
+`parcellate_scalar_as_tract_profile` is a wrapper over `map_scalar_to_streamlines` (dpv → n_nodes, Strategy B). `parcellate_scalar` is *not*: it parcellates the bundle **dseg** built by `tractogram_to_dseg` (Strategy A — warp the ROI dseg into the scalar's space, per-ROI mean), which is why its `atlas` role takes `bundle_rois`. See §3.6 and Q7.
 
 ### 3.5 tract2region — count fibers intersecting atlas ROIs
 
@@ -510,5 +509,5 @@ dataset:
 - **Q4 — encoding continuous sweeps.** Depths/thresholds should be a *dimension inside one file* (dtseries "depth as time", or a column), not N filenames differing by a `desc` token. `desc` prepend closes the *variant-label* half of naming; this is the other half.
 - **Q5 — transform two-query engine.** Implement image-resample vs point-warp queries over one graph, with the direction-convention and warp-invertibility checks from plan-review §5; error when only the wrong-direction warp exists.
 - **Q6 — subject-space / non-BIDS atlases & subcortical normalization.** Loader for FreeSurfer (non-BIDS) atlases; subject/session scoping for per-subject atlases; and the `T1w→MNI152NLin6Asym` gating for standard subcortical CIFTI (apply preprocessing's warp, or build subject-space CIFTI, else error).
-- **Q7 — wrappers vs recipes.** Decide whether the bundle-summary actions stay as named sugar or become documented recipes over their primitives: `parcellate_scalar_as_tract_profile` = `map_scalar_to_streamlines` (dpv) → n_nodes (Strategy B); `parcellate_scalar_as_roi` = `parcellate_scalar` on a bundle dseg (Strategy A). They wrap *different* primitives, so "collapse them" isn't a single decision.
+- **Q7 — wrappers vs recipes.** Decide whether the bundle-summary actions stay as named sugar or become documented recipes over their primitives: `parcellate_scalar_as_tract_profile` = `map_scalar_to_streamlines` (dpv) → n_nodes (Strategy B); `parcellate_scalar` = `parcellate_scalar` on a bundle dseg (Strategy A). They wrap *different* primitives, so "collapse them" isn't a single decision.
 - **Q8 — `trx-rs` features to add (we own these).** (i) write dpv/dps into TRX, (ii) import an external per-streamline vector (SIFT2 `.csv`) as a named dps, (iii) dps-weighted endpoint→parcel connectivity from a label volume — which also closes the plan-review "endpoint→parcel has no home" gap. Build in `trx-rs` (Rust, reusable), with MRtrix `tcksample`/`tck2connectome` as the validation oracle. Also: the Rust binaries (`trxrs`/`giftirs`/`odx`) need a container build stage on `PATH`.
