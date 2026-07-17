@@ -26,12 +26,10 @@ from . import (
     parser,
     run,
     version,
-    workflow,
 )
 
 __all__ = [
     'parser',
     'run',
     'version',
-    'workflow',
 ]

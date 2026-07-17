@@ -715,25 +715,39 @@ class _CiftiCreateDenseScalarInputSpec(_WBCommandInputSpec):
         position=1,
         desc='The input surface data from the left hemisphere.',
     )
+    roi_left = File(
+        exists=True,
+        mandatory=False,
+        argstr='-roi-left %s',
+        position=2,
+        desc='The ROI of vertices to use from the left surface (medial wall removed).',
+    )
     right_metric = File(
         exists=True,
         mandatory=False,
         argstr='-right-metric %s',
-        position=2,
+        position=3,
         desc='The input surface data from the right hemisphere.',
+    )
+    roi_right = File(
+        exists=True,
+        mandatory=False,
+        argstr='-roi-right %s',
+        position=4,
+        desc='The ROI of vertices to use from the right surface (medial wall removed).',
     )
     volume_data = File(
         exists=True,
         mandatory=False,
         argstr='-volume %s',
-        position=3,
+        position=5,
         desc='The input volumetric data.',
     )
     structure_label_volume = File(
         exists=True,
         mandatory=False,
         argstr='%s',
-        position=4,
+        position=6,
         desc='A label file indicating the structure of each voxel in volume_data.',
     )
 
@@ -1165,6 +1179,61 @@ class CiftiMath(WBCommand):
     input_spec = _CiftiMathInputSpec
     output_spec = _CiftiMathOutputSpec
     _cmd = 'wb_command -cifti-math'
+
+
+class _MetricMathInputSpec(_WBCommandInputSpec):
+    """Input specification for the MetricMath command."""
+
+    expression = traits.Str(
+        mandatory=True,
+        argstr='"%s"',
+        position=0,
+        desc="Math expression over the 'x' variable (e.g. 'x != 0').",
+    )
+    out_file = File(
+        name_source=['var_x'],
+        name_template='mathed_%s',
+        keep_extension=True,
+        argstr='%s',
+        position=1,
+        desc='Output metric (GIFTI) file',
+    )
+    var_x = File(
+        exists=True,
+        mandatory=True,
+        argstr='-var x %s',
+        position=2,
+        desc="The 'x' variable used in the expression",
+    )
+
+
+class _MetricMathOutputSpec(TraitedSpec):
+    """Output specification for the MetricMath command."""
+
+    out_file = File(exists=True, desc='output metric (GIFTI) file')
+
+
+class MetricMath(WBCommand):
+    """Evaluate a math expression on a surface metric (``wb_command -metric-math``).
+
+    A single-variable (``x``) sibling of :class:`CiftiMath` used, e.g., to derive a
+    source medial-wall ROI from a FreeSurfer morphometric with ``'x != 0'`` (the
+    medial wall is zero-filled), which feeds ``-current-roi`` on a metric resample.
+
+    Examples
+    --------
+    >>> metricmath = MetricMath()
+    >>> metricmath.inputs.var_x = 'sub-01_hemi-L_thickness.shape.gii'
+    >>> metricmath.inputs.out_file = 'roi_L.shape.gii'
+    >>> metricmath.inputs.expression = 'x != 0'
+    >>> metricmath.cmdline
+    wb_command -metric-math "x != 0" roi_L.shape.gii \
+    -var x sub-01_hemi-L_thickness.shape.gii
+    """
+
+    input_spec = _MetricMathInputSpec
+    output_spec = _MetricMathOutputSpec
+    _cmd = 'wb_command -metric-math'
 
 
 class _CiftiCorrelationInputSpec(_WBCommandInputSpec):

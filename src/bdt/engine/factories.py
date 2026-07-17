@@ -37,13 +37,146 @@ content-hash caching, and resumability for free.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 
 from bdt.interfaces.cifti import CiftiMask, CiftiVertexMask
-from bdt.interfaces.workbench import CiftiCorrelation, CiftiMath, CiftiParcellateWorkbench
+from bdt.interfaces.workbench import (
+    CiftiCorrelation,
+    CiftiCreateDenseFromTemplate,
+    CiftiMath,
+    CiftiParcellateWorkbench,
+)
 
 WORKFLOW_FACTORIES: dict[str, callable] = {}
+
+
+@dataclass
+class FactoryContext:
+    """Auxiliary-input resolver handed to factories that need files beyond their
+    wired roles — surface registration spheres, templateflow standard meshes.
+
+    Most factories ignore it (their inputs all arrive by role); the surface
+    factories use it to resolve, for the current subject, files the story spec does
+    not wire: the ``desc-msmsulc`` fsnative→fsLR sphere and the subject's fsLR
+    midthickness (from the ``surfaces`` role's own dataset), plus subject-
+    independent templateflow meshes.  It is injectable so assembly tests can build
+    the graph with a stub provider (nipype checks ``File(exists)`` only at run
+    time, so build-time paths need not exist).
+    """
+
+    provider: object = None  # bdt.engine.selection.DataProvider
+    subject: str | None = None
+    spec: object = None  # bdt.spec.model.Spec — resolves a role's upstream dataset
+    templateflow_get: object = None  # callable; defaults to templateflow.api.get
+    datasets: list | None = None  # all --datasets keys (for cross-dataset references)
+    resolved: dict | None = None  # {selection_name: Match} for this scope (entity lookup)
+
+    def dataset_of_role(self, node, role: str) -> str | None:
+        """The ``--datasets`` key feeding ``node``'s ``role`` (via its selection)."""
+        if self.spec is None:
+            return None
+        by_name = self.spec.by_name()
+        for up in node.inputs.get(role, []):
+            sel = by_name.get(up)
+            if sel is not None and sel.dataset is not None:
+                return sel.dataset
+        return None
+
+    def role_space(self, node, role: str, default: str | None = None) -> str | None:
+        """The ``space`` entity of the file feeding ``node``'s ``role``.
+
+        Read from the resolved selection match's entities (surfaces default to their
+        mesh's anatomical space when the ``space`` entity is absent — ``T1w``).
+        """
+        return self._role_entity(node, role, 'space', default)
+
+    def role_session(self, node, role: str) -> str | None:
+        """The ``ses`` entity of the file feeding ``node``'s ``role`` (``None`` if
+        the data has no session, e.g. a subject-level anatomical)."""
+        return self._role_entity(node, role, 'ses', None)
+
+    def _role_entity(self, node, role, key, default):
+        if self.resolved is None:
+            return default
+        for up in node.inputs.get(role, []):
+            match = self.resolved.get(up)
+            if match is not None:
+                return match.entities.get(key, default)
+        return default
+
+    def _select_scoped(self, dataset, filters, exclude, session):
+        """Select from ``dataset``, honouring the subject/session *anat level*.
+
+        A BIDS anatomical may sit at **session level** (``sub-X/ses-Y/anat``) or
+        **subject level** (``sub-X/anat``, shared across sessions).  When a session
+        is known we take the session-matched file if one exists, else fall back to a
+        *session-less* (subject-level) file — never a *different* session's file.
+        """
+        if session is not None:
+            hits = self.provider.select(
+                dataset, {**filters, 'ses': session}, exclude, subject=self.subject
+            )
+            if hits:
+                return hits
+            # subject-level fallback: only files that carry no session entity
+            return self.provider.select(
+                dataset, {**filters, 'ses': None}, exclude, subject=self.subject
+            )
+        return self.provider.select(dataset, filters, exclude, subject=self.subject)
+
+    def aux_file(
+        self, dataset: str, filters: dict, exclude: list | None = None, session: str | None = None
+    ) -> str:
+        """Resolve exactly one auxiliary file from ``dataset`` for the subject/session."""
+        matches = self._select_scoped(dataset, filters, exclude, session)
+        if len(matches) != 1:
+            raise ValueError(
+                f'Auxiliary selection on dataset {dataset!r} with {filters} (session '
+                f'{session!r}) matched {len(matches)} files (expected exactly 1).'
+            )
+        return matches[0].path
+
+    def find_reference(
+        self, filters: dict, exclude: list | None = None, session: str | None = None
+    ) -> str:
+        """Find exactly one file matching ``filters`` across *all* datasets.
+
+        For registration references that are not wired into the node graph and may
+        live in a different dataset than either input — e.g. the QSIPrep
+        ``space-ACPC`` anatomical used to compute the T1w↔ACPC bridge, which is in
+        the ``qsiprep`` dataset while the scalar comes from ``qsirecon``.  Honours
+        the subject/session anat level like :meth:`aux_file`.
+        """
+        hits: list[tuple[str, str]] = []
+        for ds in self.datasets or []:
+            for m in self._select_scoped(ds, filters, exclude, session):
+                hits.append((ds, m.path))
+        if len(hits) != 1:
+            raise ValueError(
+                f'Reference selection {filters} (session {session!r}) matched {len(hits)} files '
+                f'across datasets {list(self.datasets or [])} (expected exactly 1): '
+                f'{[h[1] for h in hits]}'
+            )
+        return hits[0][1]
+
+    def tf_get(self, **kwargs) -> str:
+        """Fetch a single templateflow file path (never a list)."""
+        get = self.templateflow_get
+        if get is None:
+            from templateflow import api as tf
+
+            get = tf.get
+        res = get(**kwargs)
+        if isinstance(res, (list, tuple)):
+            if len(res) != 1:
+                raise ValueError(
+                    f'templateflow.get({kwargs}) returned {len(res)} files (expected 1).'
+                )
+            res = res[0]
+        return str(res)
 
 
 def workflow_factory(action: str):
@@ -79,6 +212,16 @@ def _init_parcellate_cifti_wf(node, name, in_role: str, out_file: str) -> pe.Wor
     inputnode = pe.Node(niu.IdentityInterface(fields=[in_role, 'atlas']), name='inputnode')
     outputnode = pe.Node(niu.IdentityInterface(fields=['out', 'coverage']), name='outputnode')
 
+    # 0. restrict the atlas to the data's brainordinates.  A cortex-only surface
+    # scalar (59412 grayordinates) can't be parcellated by a whole-brain dlabel
+    # (91282) — cifti-parcellate errors on the missing subcortical voxels — so drop
+    # the atlas structures the data lacks.  Byte-identical no-op when they match, so
+    # the dense-CIFTI (story 3.1 / ALFF) bit-for-bit results are unchanged.
+    restrict_atlas = pe.Node(
+        CiftiCreateDenseFromTemplate(out_file='atlas_restricted.dlabel.nii'),
+        name='restrict_atlas',
+    )
+
     # 1. vertex-wise coverage (1 = has data, 0 = all-zero/NaN across the map/series)
     vertex_mask = pe.Node(CiftiVertexMask(), name='vertex_mask')
 
@@ -106,10 +249,12 @@ def _init_parcellate_cifti_wf(node, name, in_role: str, out_file: str) -> pe.Wor
     mask = pe.Node(CiftiMask(), name='mask')
 
     wf.connect([
+        (inputnode, restrict_atlas, [(in_role, 'template_cifti'), ('atlas', 'label')]),
         (inputnode, vertex_mask, [(in_role, 'in_file')]),
-        (inputnode, parcellate_coverage, [('atlas', 'atlas_label')]),
+        (restrict_atlas, parcellate_coverage, [('out_file', 'atlas_label')]),
         (vertex_mask, parcellate_coverage, [('mask_file', 'in_file')]),
-        (inputnode, parcellate_data, [(in_role, 'in_file'), ('atlas', 'atlas_label')]),
+        (inputnode, parcellate_data, [(in_role, 'in_file')]),
+        (restrict_atlas, parcellate_data, [('out_file', 'atlas_label')]),
         (vertex_mask, parcellate_data, [('mask_file', 'cifti_weights')]),
         (parcellate_coverage, threshold, [('out_file', 'data')]),
         (parcellate_data, mask, [('out_file', 'in_file')]),
@@ -121,13 +266,13 @@ def _init_parcellate_cifti_wf(node, name, in_role: str, out_file: str) -> pe.Wor
 
 
 @workflow_factory('parcellate_timeseries')
-def init_parcellate_timeseries_wf(node, name=None) -> pe.Workflow:
+def init_parcellate_timeseries_wf(node, name=None, context=None) -> pe.Workflow:
     """Parcellate a dense CIFTI series with a dlabel atlas, coverage-aware -> ptseries."""
     return _init_parcellate_cifti_wf(node, name, 'timeseries', 'parcellated.ptseries.nii')
 
 
 @workflow_factory('parcellate_scalar')
-def init_parcellate_scalar_wf(node, name=None) -> pe.Workflow:
+def init_parcellate_scalar_wf(node, name=None, context=None) -> pe.Workflow:
     """Parcellate a dense CIFTI scalar (dscalar) with a dlabel atlas -> pscalar.
 
     Same coverage-aware machinery as :func:`init_parcellate_timeseries_wf`.  CIFTI
@@ -137,7 +282,7 @@ def init_parcellate_scalar_wf(node, name=None) -> pe.Workflow:
 
 
 @workflow_factory('functional_connectivity')
-def init_functional_connectivity_wf(node, name=None) -> pe.Workflow:
+def init_functional_connectivity_wf(node, name=None, context=None) -> pe.Workflow:
     """Correlate a parcellated series (ptseries) -> pconn relmat."""
     wf = pe.Workflow(name=name or node.name)
     inputnode, outputnode = _io_nodes(['timeseries'])
@@ -146,4 +291,371 @@ def init_functional_connectivity_wf(node, name=None) -> pe.Workflow:
         (inputnode, correlate, [('timeseries', 'in_file')]),
         (correlate, outputnode, [('out_file', 'out')]),
     ])  # fmt:skip
+    return wf
+
+
+def _pick_surface_file(in_files, hemi, suffix=''):
+    """Return the single per-hemisphere file from a grouped L/R role's file list.
+
+    ``in_files`` is a grouped role's list (e.g. the L/R native ``surface_scalar``,
+    or the L/R white/pial/midthickness ``surfaces`` set); pick the one for ``hemi``
+    (``'L'``/``'R'``), optionally also matching ``suffix`` (e.g. ``midthickness``).
+    """
+    import os
+
+    cands = [f for f in in_files if f'hemi-{hemi}' in os.path.basename(f)]
+    if suffix:
+        cands = [f for f in cands if suffix in os.path.basename(f)]
+    if len(cands) != 1:
+        raise ValueError(
+            f'Expected exactly one hemi-{hemi} file (suffix={suffix!r}) in {in_files}, got {cands}'
+        )
+    return cands[0]
+
+
+@workflow_factory('resample_surface_scalar')
+def init_resample_surface_scalar_wf(node, name=None, context=None) -> pe.Workflow:
+    """Resample a per-hemi native surface scalar (thickness/sulc) to fsLR grayordinates.
+
+    Reproduces fmriprep/sMRIPrep morphometric grayordinate resampling bit-for-bit.
+    Per hemisphere: a source medial-wall ROI (non-zero data — FreeSurfer
+    morphometrics zero the medial wall) feeds ``-current-roi`` on
+    ``wb -metric-resample ADAP_BARY_AREA``; the current sphere is the subject's
+    ``desc-msmsulc`` fsnative→fsLR sphere, the new sphere the templateflow fsLR
+    32k sphere, and the area surfaces go native-midthickness → the subject's own
+    fsLR-32k midthickness.  The L/R metrics are then stapled with
+    ``wb -cifti-create-dense-scalar`` + the templateflow ``nomedialwall`` ROIs into
+    a den-91k (medial-wall-removed, 59412-grayordinate) cortex dscalar.
+
+    ``surface_scalar`` and ``surfaces`` are *grouped* roles (L+R passed as lists);
+    the ``desc-msmsulc`` spheres and fsLR midthickness are auxiliary inputs the
+    story spec does not wire, resolved for the subject via ``context``.
+    """
+    from niworkflows.interfaces.workbench import MetricResample
+
+    from bdt.interfaces.workbench import CiftiCreateDenseScalar, MetricMath
+
+    context = context or FactoryContext()
+    if context.provider is None:
+        raise ValueError(
+            f'resample_surface_scalar node {node.name!r} needs a FactoryContext with a '
+            'provider to resolve the msmsulc spheres / fsLR midthickness.'
+        )
+    density = str(node.parameters.get('target_density', '32k'))
+    surfaces_dataset = context.dataset_of_role(node, 'surfaces')
+    surf_ses = context.role_session(node, 'surfaces')  # subject- vs session-level anat
+
+    wf = pe.Workflow(name=name or node.name)
+    inputnode = pe.Node(
+        niu.IdentityInterface(fields=['surface_scalar', 'surfaces']), name='inputnode'
+    )
+    outputnode = pe.Node(niu.IdentityInterface(fields=['out']), name='outputnode')
+    create = pe.Node(CiftiCreateDenseScalar(out_file='resampled.dscalar.nii'), name='create_dense')
+
+    for hemi in ('L', 'R'):
+        pick_scalar = pe.Node(
+            niu.Function(
+                function=_pick_surface_file,
+                input_names=['in_files', 'hemi', 'suffix'],
+                output_names=['out'],
+            ),
+            name=f'pick_scalar_{hemi}',
+        )
+        pick_scalar.inputs.hemi = hemi
+        pick_midthick = pe.Node(
+            niu.Function(
+                function=_pick_surface_file,
+                input_names=['in_files', 'hemi', 'suffix'],
+                output_names=['out'],
+            ),
+            name=f'pick_midthick_{hemi}',
+        )
+        pick_midthick.inputs.hemi = hemi
+        pick_midthick.inputs.suffix = 'midthickness'
+
+        # source medial-wall ROI (FreeSurfer morphometrics are zero on the mwall)
+        srcroi = pe.Node(
+            MetricMath(expression='x != 0', out_file=f'srcroi_{hemi}.shape.gii'),
+            name=f'srcroi_{hemi}',
+        )
+
+        # auxiliary inputs the spec does not wire (per subject/session / templateflow)
+        msmsulc_sphere = context.aux_file(
+            surfaces_dataset,
+            {'suffix': 'sphere', 'space': 'fsLR', 'desc': 'msmsulc', 'hemi': hemi},
+            session=surf_ses,
+        )
+        sub_fslr_midthick = context.aux_file(
+            surfaces_dataset,
+            {'suffix': 'midthickness', 'space': 'fsLR', 'den': density, 'hemi': hemi},
+            session=surf_ses,
+        )
+        tpl_sphere = context.tf_get(
+            template='fsLR',
+            density=density,
+            hemi=hemi,
+            space=None,
+            suffix='sphere',
+            extension='.surf.gii',
+        )
+        tpl_roi = context.tf_get(
+            template='fsLR',
+            density=density,
+            hemi=hemi,
+            desc='nomedialwall',
+            suffix='dparc',
+            extension='.label.gii',
+        )
+
+        resample = pe.Node(
+            MetricResample(
+                method='ADAP_BARY_AREA',
+                area_surfs=True,
+                current_sphere=msmsulc_sphere,
+                new_sphere=tpl_sphere,
+                new_area=sub_fslr_midthick,
+                out_file=f'resampled_{hemi}.shape.gii',
+            ),
+            name=f'resample_{hemi}',
+        )
+
+        wf.connect([
+            (inputnode, pick_scalar, [('surface_scalar', 'in_files')]),
+            (inputnode, pick_midthick, [('surfaces', 'in_files')]),
+            (pick_scalar, srcroi, [('out', 'var_x')]),
+            (pick_scalar, resample, [('out', 'in_file')]),
+            (pick_midthick, resample, [('out', 'current_area')]),
+            (srcroi, resample, [('out_file', 'roi_metric')]),
+        ])  # fmt:skip
+        if hemi == 'L':
+            create.inputs.roi_left = tpl_roi
+            wf.connect([(resample, create, [('out_file', 'left_metric')])])
+        else:
+            create.inputs.roi_right = tpl_roi
+            wf.connect([(resample, create, [('out_file', 'right_metric')])])
+
+    wf.connect([(create, outputnode, [('out_file', 'out')])])
+    return wf
+
+
+def _apply_brain_mask(in_file, mask_file):
+    """Brain-extract a volume by multiplying it with a binary mask (for registration)."""
+    import os
+
+    import nibabel as nb
+    import numpy as np
+
+    img = nb.load(in_file)
+    mask = np.asanyarray(nb.load(mask_file).dataobj) > 0
+    data = np.asanyarray(img.dataobj) * mask
+    out = os.path.abspath('brain.nii.gz')
+    nb.Nifti1Image(data.astype('float32'), img.affine, img.header).to_filename(out)
+    return out
+
+
+def _first(inlist):
+    """Return the first element (to pluck a single transform off a list output)."""
+    return inlist[0]
+
+
+def _rigid_acpc_to_t1w_node():
+    """A rigid, mask-based ``antsRegistration`` node (fixed = T1w, moving = ACPC-T1w).
+
+    ``forward_transforms[0]`` is then the ``from-ACPC_to-T1w`` GenericAffine — the
+    file ``giftirs`` needs to warp a T1w surface into ACPC.  Brain-extracted inputs
+    are wired in by the caller (matches the empirically validated recipe).
+    """
+    from nipype.interfaces.ants import Registration
+
+    return pe.Node(
+        Registration(
+            dimension=3,
+            float=False,
+            interpolation='Linear',
+            winsorize_lower_quantile=0.005,
+            winsorize_upper_quantile=0.995,
+            use_histogram_matching=False,
+            initial_moving_transform_com=1,
+            transforms=['Rigid'],
+            transform_parameters=[(0.1,)],
+            metric=['MI'],
+            metric_weight=[1.0],
+            radius_or_number_of_bins=[32],
+            sampling_strategy=['Regular'],
+            sampling_percentage=[0.25],
+            number_of_iterations=[[1000, 500, 250, 100]],
+            convergence_threshold=[1e-6],
+            convergence_window_size=[10],
+            shrink_factors=[[8, 4, 2, 1]],
+            smoothing_sigmas=[[3, 2, 1, 0]],
+            sigma_units=['vox'],
+        ),
+        name='register_acpc',
+        n_procs=4,
+    )
+
+
+@workflow_factory('map_scalar_to_surface')
+def init_map_scalar_to_surface_wf(node, name=None, context=None) -> pe.Workflow:
+    """Map a volumetric scalar onto the cortical surface (ribbon-constrained).
+
+    Per hemisphere, ``wb -volume-to-surface-mapping -ribbon-constrained`` samples the
+    volume between the white and pial surfaces onto the midthickness mesh, then
+    ``-metric-dilate`` fills small holes.  ``outputnode.out`` is the per-hemi list
+    ``[L, R]`` of native-mesh metrics (so a downstream ``resample_surface_scalar``
+    consumes it exactly like a grouped L/R selection).
+
+    **Cross-space (Strategy B).** When the scalar's space differs from the surfaces'
+    (the story case: QSIRecon NODDI in ``ACPC`` vs sMRIPrep surfaces in ``T1w``), the
+    surface *vertices* are warped into the scalar's space before mapping.  Per the
+    locked design decision, the T1w↔ACPC bridge is the one transform BDT *computes*:
+    a rigid, brain-masked ``antsRegistration`` (fixed = the surfaces' T1w anatomical,
+    moving = the ``space-ACPC`` anatomical) whose ``from-ACPC_to-T1w`` GenericAffine
+    is applied to each surface with ``giftirs transform`` (lossless, vertex-order
+    preserving).  QSIPrep's own stored ACPC↔anat transforms are deliberately *not*
+    used.  Any other cross-space pairing raises ``NotImplementedError``.
+    """
+    from niworkflows.interfaces.workbench import MetricDilate, VolumeToSurfaceMapping
+
+    from bdt.interfaces.giftirs import GiftiTransform
+
+    context = context or FactoryContext()
+    surface_space = context.role_space(node, 'surfaces', default='T1w')
+    scalar_space = context.role_space(node, 'scalar', default=None)
+    cross_space = scalar_space is not None and scalar_space != surface_space
+
+    wf = pe.Workflow(name=name or node.name)
+    inputnode = pe.Node(niu.IdentityInterface(fields=['scalar', 'surfaces']), name='inputnode')
+    outputnode = pe.Node(niu.IdentityInterface(fields=['out']), name='outputnode')
+    merge = pe.Node(niu.Merge(2), name='merge_hemis')  # [L, R] -> outputnode.out
+
+    xfm_source = None  # a node field emitting the from-ACPC_to-T1w transform, if cross
+    if cross_space:
+        if {surface_space, scalar_space} != {'T1w', 'ACPC'}:
+            raise NotImplementedError(
+                f'map_scalar_to_surface node {node.name!r}: only the T1w<->ACPC bridge is '
+                f'computed (rigid registration); got surfaces in {surface_space!r}, scalar in '
+                f'{scalar_space!r}. Other cross-space mappings are not implemented.'
+            )
+        if context.provider is None:
+            raise ValueError(
+                f'map_scalar_to_surface node {node.name!r} is cross-space and needs a '
+                'FactoryContext provider to resolve the registration references.'
+            )
+        surfaces_dataset = context.dataset_of_role(node, 'surfaces')
+        # match each reference's anat level (subject- vs session-level) to its data's
+        # session: fixed to the surfaces' session, moving to the scalar's session.
+        surf_ses = context.role_session(node, 'surfaces')
+        scalar_ses = context.role_session(node, 'scalar')
+        # fixed = the surfaces' own T1w anatomical (+ brain mask), native (no space)
+        fixed_img = context.aux_file(
+            surfaces_dataset, {'suffix': 'T1w', 'desc': 'preproc', 'space': None}, session=surf_ses
+        )
+        fixed_mask = context.aux_file(
+            surfaces_dataset, {'suffix': 'mask', 'desc': 'brain', 'space': None}, session=surf_ses
+        )
+        # moving = the space-ACPC anatomical (+ brain mask), found across datasets.
+        # QSIPrep's --anat-modality may make this a T2w rather than a T1w; the rigid
+        # MI registration is contrast-agnostic, so accept either (fixed stays the
+        # surfaces' T1w space and MI handles any cross-contrast fit).
+        moving_img = context.find_reference(
+            {'suffix': ['T1w', 'T2w'], 'desc': 'preproc', 'space': 'ACPC', 'datatype': 'anat'},
+            session=scalar_ses,
+        )
+        moving_mask = context.find_reference(
+            {'suffix': 'mask', 'desc': 'brain', 'space': 'ACPC', 'datatype': 'anat'},
+            session=scalar_ses,
+        )
+
+        extract_fixed = pe.Node(
+            niu.Function(
+                function=_apply_brain_mask,
+                input_names=['in_file', 'mask_file'],
+                output_names=['out'],
+            ),
+            name='extract_fixed',
+        )
+        extract_fixed.inputs.in_file = fixed_img
+        extract_fixed.inputs.mask_file = fixed_mask
+        extract_moving = pe.Node(
+            niu.Function(
+                function=_apply_brain_mask,
+                input_names=['in_file', 'mask_file'],
+                output_names=['out'],
+            ),
+            name='extract_moving',
+        )
+        extract_moving.inputs.in_file = moving_img
+        extract_moving.inputs.mask_file = moving_mask
+
+        register = _rigid_acpc_to_t1w_node()  # fixed=T1w, moving=ACPC -> from-ACPC_to-T1w
+        pick_xfm = pe.Node(
+            niu.Function(function=_first, input_names=['inlist'], output_names=['out']),
+            name='pick_xfm',
+        )
+        wf.connect([
+            (extract_fixed, register, [('out', 'fixed_image')]),
+            (extract_moving, register, [('out', 'moving_image')]),
+            (register, pick_xfm, [('forward_transforms', 'inlist')]),
+        ])  # fmt:skip
+        xfm_source = (pick_xfm, 'out')
+
+    for i, hemi in enumerate(('L', 'R'), start=1):
+        picks = {}
+        for which in ('white', 'pial', 'midthickness'):
+            pick = pe.Node(
+                niu.Function(
+                    function=_pick_surface_file,
+                    input_names=['in_files', 'hemi', 'suffix'],
+                    output_names=['out'],
+                ),
+                name=f'pick_{which}_{hemi}',
+            )
+            pick.inputs.hemi = hemi
+            pick.inputs.suffix = which
+            wf.connect([(inputnode, pick, [('surfaces', 'in_files')])])
+            picks[which] = pick
+
+        # surfaces used for mapping: warped into the scalar's space when cross-space
+        surf_field = {}
+        if cross_space:
+            for which in ('white', 'pial', 'midthickness'):
+                warp = pe.Node(
+                    GiftiTransform(out_file=f'warped_hemi-{hemi}_{which}.surf.gii'),
+                    name=f'warp_{which}_{hemi}',
+                )
+                wf.connect([
+                    (picks[which], warp, [('out', 'in_file')]),
+                    (xfm_source[0], warp, [(xfm_source[1], 'transform')]),
+                ])  # fmt:skip
+                surf_field[which] = (warp, 'out_file')
+        else:
+            for which in ('white', 'pial', 'midthickness'):
+                surf_field[which] = (picks[which], 'out')
+
+        mid_n, mid_f = surf_field['midthickness']
+        white_n, white_f = surf_field['white']
+        pial_n, pial_f = surf_field['pial']
+
+        vol2surf = pe.Node(
+            VolumeToSurfaceMapping(
+                method='ribbon-constrained', out_file=f'mapped_hemi-{hemi}.func.gii'
+            ),
+            name=f'vol2surf_{hemi}',
+        )
+        dilate = pe.Node(
+            MetricDilate(distance=10.0, nearest=True, out_file=f'mapped_dil_hemi-{hemi}.func.gii'),
+            name=f'dilate_{hemi}',
+        )
+        wf.connect([
+            (inputnode, vol2surf, [('scalar', 'volume_file')]),
+            (mid_n, vol2surf, [(mid_f, 'surface_file')]),
+            (white_n, vol2surf, [(white_f, 'inner_surface')]),
+            (pial_n, vol2surf, [(pial_f, 'outer_surface')]),
+            (vol2surf, dilate, [('out_file', 'in_file')]),
+            (mid_n, dilate, [(mid_f, 'surf_file')]),
+            (dilate, merge, [('out_file', f'in{i}')]),
+        ])  # fmt:skip
+
+    wf.connect([(merge, outputnode, [('out', 'out')])])
     return wf

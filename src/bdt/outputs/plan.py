@@ -133,6 +133,9 @@ def node_output_entities(spec: Spec, resolved: dict[str, Match]) -> dict[str, di
         primary = _primary_upstream(node)
         base = dict(entities.get(primary, {})) if primary else {}
         base.pop('extension', None)  # geometry changes; each product sets extension
+        # A processing node's product is never per-hemi (surface actions combine
+        # L+R into one dscalar; others are already whole-brain) — drop hemi.
+        base.pop('hemi', None)
 
         atlas = _atlas_label(node, entities)
         if atlas is not None:
@@ -174,8 +177,13 @@ def _produces_cifti(spec: Spec, resolved: dict[str, Match]) -> dict[str, bool]:
             match = resolved.get(node.name)
             flag[node.name] = bool(match and is_cifti(match.path))
         else:
-            primary = _primary_upstream(node)
-            flag[node.name] = flag.get(primary, False)
+            aspec = node.action_spec
+            out = aspec.out if aspec is not None else None
+            if out is not None and out.output_is_cifti:
+                # dense CIFTI produced from a (per-hemi GIFTI) input regardless of format
+                flag[node.name] = True
+            else:
+                flag[node.name] = flag.get(_primary_upstream(node), False)
     return flag
 
 
@@ -258,7 +266,7 @@ def build_sink_plan(
         common = {'datatype': datatype, 'scope': node.scope}
 
         if cifti_by_node.get(node.name) and cifti_suffix and out.cifti_extension:
-            # Native CIFTI product (ptseries/pconn/pscalar) alongside the flattened TSV.
+            # Native CIFTI product (ptseries/pconn/pscalar/dscalar).
             products.append(
                 OutputProduct(
                     derive=PASSTHROUGH,
@@ -269,16 +277,19 @@ def build_sink_plan(
                     **common,
                 )
             )
-            products.append(
-                OutputProduct(
-                    derive=CIFTI_TO_TSV,
-                    suffix=tsv_suffix,
-                    extension=out.extension,
-                    entities=dict(mid),
-                    sidecar=dict(sidecar),
-                    **common,
+            # ... plus a flattened TSV for tabular (parcellated) outputs, but not for
+            # a dense CIFTI (a resampled/mapped surface scalar has no table form).
+            if out.emit_tsv:
+                products.append(
+                    OutputProduct(
+                        derive=CIFTI_TO_TSV,
+                        suffix=tsv_suffix,
+                        extension=out.extension,
+                        entities=dict(mid),
+                        sidecar=dict(sidecar),
+                        **common,
+                    )
                 )
-            )
         else:
             # Volumetric / already-tabular: the primary (TSV) product only.
             products.append(

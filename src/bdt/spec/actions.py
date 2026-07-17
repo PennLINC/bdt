@@ -149,6 +149,13 @@ class OutputSpec:
     ALFF stays ``stat-alff_boldmap`` and a resampled NODDI stays
     ``model-noddi_param-*_dwimap``.  ``suffix``/``datatype`` then act as fallbacks
     when the source lacks them.
+
+    ``emit_tsv`` controls whether a CIFTI-valued node also flattens to a TSV: true
+    for parcellations (parcel×time / parcel means), false for a *dense* CIFTI
+    output (a resampled/mapped surface scalar is a dscalar, not a table).
+    ``output_is_cifti`` forces the node's primary product to be treated as CIFTI
+    regardless of its input format — for actions that emit a dense CIFTI from a
+    per-hemi GIFTI input (surface resampling/mapping/assembly).
     """
 
     suffix: str
@@ -160,6 +167,8 @@ class OutputSpec:
     cifti_extension: str | None = None
     extra: tuple[ExtraProduct, ...] = ()  # secondary products (e.g. coverage)
     preserve_source: bool = False
+    emit_tsv: bool = True  # also flatten a CIFTI product to TSV (false for dense CIFTI)
+    output_is_cifti: bool = False  # primary product is CIFTI regardless of input
 
     def __post_init__(self):
         if self.entities is None:
@@ -227,6 +236,8 @@ def _o(
     cifti_extension=None,
     extra=(),
     preserve_source=False,
+    emit_tsv=True,
+    output_is_cifti=False,
     **entities,
 ) -> OutputSpec:
     return OutputSpec(
@@ -239,6 +250,8 @@ def _o(
         cifti_extension=cifti_extension,
         extra=tuple(extra),
         preserve_source=preserve_source,
+        emit_tsv=emit_tsv,
+        output_is_cifti=output_is_cifti,
     )
 
 
@@ -264,9 +277,7 @@ _ACTIONS: tuple[ActionSpec, ...] = (
             primary_role='timeseries',
             cifti_suffix='timeseries',
             cifti_extension='.ptseries.nii',
-            extra=(
-                ExtraProduct('coverage', 'boldmap', '.pscalar.nii', stat='coverage'),
-            ),
+            extra=(ExtraProduct('coverage', 'boldmap', '.pscalar.nii', stat='coverage'),),
             stat='mean',
         ),
     ),
@@ -314,18 +325,36 @@ _ACTIONS: tuple[ActionSpec, ...] = (
         'surface_scalar',
         roles=(_r('scalar', 'scalar'), _r('surfaces', 'surfaces', fan_out=False)),
         parameters=frozenset({'source_space'}),
-        out=_o('map', '.dscalar.nii', 'func', primary_role='scalar'),
+        # Ribbon-samples a volume onto the native surface, keeping the source
+        # identity (model/param/dwimap); output is a per-hemi native-mesh metric
+        # list, typically an intermediate feeding resample_surface_scalar.
+        out=_o('map', '.func.gii', 'func', primary_role='scalar', preserve_source=True),
     ),
     ActionSpec(
         'resample_surface_scalar',
         PROCESSING,
         'surface_scalar',
         roles=(
-            _r('surface_scalar', 'surface_scalar'),
+            # Both roles are per-hemi sets grouped (L+R) into one dscalar, not fanned.
+            _r('surface_scalar', 'surface_scalar', fan_out=False),
             _r('surfaces', 'surfaces', fan_out=False),
         ),
         parameters=frozenset({'target_space', 'target_density'}),
-        out=_o('map', '.dscalar.nii', 'func', primary_role='surface_scalar'),
+        # Data-identity-preserving: keeps the source suffix/datatype (thickness in
+        # anat), drops hemi, adds space-fsLR + den-91k (grayordinate cortex, medial
+        # wall removed).  A dense dscalar -> native CIFTI only, no TSV flatten.
+        out=_o(
+            'map',
+            '.dscalar.nii',
+            'anat',
+            primary_role='surface_scalar',
+            cifti_extension='.dscalar.nii',
+            preserve_source=True,
+            emit_tsv=False,
+            output_is_cifti=True,
+            space='fsLR',
+            den='91k',
+        ),
     ),
     ActionSpec(
         'cortical_depth_profile',

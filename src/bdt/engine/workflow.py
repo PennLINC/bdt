@@ -67,6 +67,7 @@ def init_bdt_wf(
     name: str = 'bdt_wf',
     base_directory: str | None = None,
     sink_plan: dict | None = None,
+    context=None,
 ):
     """Build a nipype ``Workflow`` for one scope of a validated spec.
 
@@ -86,6 +87,9 @@ def init_bdt_wf(
     sink_plan
         ``{node_name: [OutputProduct, ...]}`` from
         :func:`bdt.outputs.plan.build_sink_plan`.
+    context
+        Optional :class:`~bdt.engine.factories.FactoryContext` used by factories
+        that resolve auxiliary inputs (surface spheres, templateflow meshes).
     """
     from nipype.interfaces import utility as niu
     from nipype.pipeline import engine as pe
@@ -108,7 +112,7 @@ def init_bdt_wf(
                 raise NotImplementedError(
                     f'No nipype workflow factory for action {node.action!r} (node {node.name!r}).'
                 )
-            built[node.name] = ('processing', factory(node))
+            built[node.name] = ('processing', factory(node, context=context))
 
     for node in spec.all_nodes:
         if node.is_selection:

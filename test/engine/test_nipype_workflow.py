@@ -76,6 +76,7 @@ def test_compile_story_3_1_to_nipype_workflow():
     # processing sub-workflow internals (proves the factories ran + connected)
     assert 'parcellate_bold.parcellate_data' in names
     assert 'parcellate_bold.vertex_mask' in names  # coverage-aware pipeline
+    assert 'parcellate_bold.restrict_atlas' in names  # atlas -> data brainordinates
     assert 'parcellate_bold.inputnode' in names
     assert 'fc_bold.correlate' in names
 
@@ -111,12 +112,15 @@ def test_sink_nodes_attached_from_plan(tmp_path):
     resolved = {
         'load_bold': Match(
             path='/data/sub-01_bold.dtseries.nii',
-            entities={'sub': '01', 'space': 'fsLR', 'den': '91k', 'suffix': 'bold',
-                      'extension': '.dtseries.nii'},
+            entities={
+                'sub': '01',
+                'space': 'fsLR',
+                'den': '91k',
+                'suffix': 'bold',
+                'extension': '.dtseries.nii',
+            },
         ),
-        'atlas_4s456': Match(
-            path='/data/atlas.dlabel.nii', entities={'atlas': '4S456Parcels'}
-        ),
+        'atlas_4s456': Match(path='/data/atlas.dlabel.nii', entities={'atlas': '4S456Parcels'}),
     }
     plan = build_sink_plan(spec, resolved)
     selections = {
@@ -139,6 +143,322 @@ def test_no_sinks_without_plan():
     spec = parse_spec(STORY_3_1)
     wf = init_bdt_wf(spec, {'load_bold': '/x/b.dtseries.nii', 'atlas_4s456': '/x/a.dlabel.nii'})
     assert not any('sink' in n for n in wf.list_node_names())
+
+
+SURFACE_SPEC = {
+    'nodes': [
+        {
+            'name': 'surfaces',
+            'action': 'select_data',
+            'dataset': 'anat',
+            'filters': {
+                'hemi': ['L', 'R'],
+                'suffix': ['pial', 'white', 'midthickness'],
+                'extension': '.surf.gii',
+            },
+        },
+        {
+            'name': 'load_thickness',
+            'action': 'select_data',
+            'dataset': 'anat',
+            'filters': {'suffix': 'thickness', 'extension': '.shape.gii'},
+        },
+        {
+            'name': 'thickness_fslr',
+            'action': 'resample_surface_scalar',
+            'inputs': {'surface_scalar': 'load_thickness', 'surfaces': 'surfaces'},
+            'parameters': {'target_density': '32k'},
+            'write_outputs': True,
+        },
+    ]
+}
+
+
+def test_compile_resample_surface_scalar(tmp_path):
+    """Grouped surface roles + aux context compile to a per-hemi resample factory.
+
+    Tool-free: a stub provider + fake templateflow getter resolve the aux inputs to
+    touched dummy files (nipype validates File(exists) at set time), so the graph
+    builds without running wb_command.
+    """
+    from bdt.engine.factories import FactoryContext
+    from bdt.engine.selection import DictDataProvider, Match
+
+    def touch(rel):
+        p = tmp_path / rel
+        p.touch()
+        return str(p)
+
+    spec = parse_spec(SURFACE_SPEC)
+    provider = DictDataProvider(
+        {
+            'anat': [
+                Match(
+                    touch(f'sub-01_hemi-{h}_space-fsLR_desc-msmsulc_sphere.surf.gii'),
+                    {'suffix': 'sphere', 'space': 'fsLR', 'desc': 'msmsulc', 'hemi': h},
+                )
+                for h in 'LR'
+            ]
+            + [
+                Match(
+                    touch(f'sub-01_hemi-{h}_space-fsLR_den-32k_midthickness.surf.gii'),
+                    {'suffix': 'midthickness', 'space': 'fsLR', 'den': '32k', 'hemi': h},
+                )
+                for h in 'LR'
+            ],
+        }
+    )
+
+    def fake_tf(**kw):
+        tag = 'sphere.surf.gii' if kw.get('suffix') == 'sphere' else 'nomedialwall.label.gii'
+        return touch(f'tpl-fsLR_hemi-{kw["hemi"]}_{tag}')
+
+    context = FactoryContext(provider=provider, subject='01', spec=spec, templateflow_get=fake_tf)
+    # grouped selections arrive as lists of paths on the source nodes
+    selections = {
+        'surfaces': [
+            f'/a/sub-01_hemi-{h}_{s}.surf.gii'
+            for h in 'LR'
+            for s in ('pial', 'white', 'midthickness')
+        ],
+        'load_thickness': [f'/a/sub-01_hemi-{h}_thickness.shape.gii' for h in 'LR'],
+    }
+    wf = init_bdt_wf(spec, selections, context=context)
+
+    names = set(wf.list_node_names())
+    for want in (
+        'thickness_fslr.inputnode',
+        'thickness_fslr.create_dense',
+        'thickness_fslr.resample_L',
+        'thickness_fslr.resample_R',
+        'thickness_fslr.srcroi_L',
+        'thickness_fslr.pick_midthick_R',
+    ):
+        assert want in names, f'missing {want}'
+
+    # aux inputs were resolved for the subject and fixed on the resample nodes
+    rl = wf.get_node('thickness_fslr').get_node('resample_L')
+    assert rl.inputs.current_sphere.endswith('desc-msmsulc_sphere.surf.gii')
+    assert rl.inputs.new_area.endswith('den-32k_midthickness.surf.gii')
+    assert rl.inputs.method == 'ADAP_BARY_AREA'
+    # grouped source node holds the L/R list unchanged
+    assert wf.get_node('load_thickness').inputs.out == selections['load_thickness']
+
+
+def _map_spec():
+    return parse_spec(
+        {
+            'nodes': [
+                {
+                    'name': 'surfaces',
+                    'action': 'select_data',
+                    'dataset': 'anat',
+                    'filters': {
+                        'hemi': ['L', 'R'],
+                        'suffix': ['pial', 'white', 'midthickness'],
+                        'extension': '.surf.gii',
+                    },
+                },
+                {
+                    'name': 'load_noddi',
+                    'action': 'select_data',
+                    'dataset': 'qsirecon',
+                    'filters': {
+                        'suffix': 'dwimap',
+                        'model': 'noddi',
+                        'param': 'icvf',
+                        'space': 'ACPC',
+                    },
+                },
+                {
+                    'name': 'noddi_on_surface',
+                    'action': 'map_scalar_to_surface',
+                    'inputs': {'scalar': 'load_noddi', 'surfaces': 'surfaces'},
+                },
+            ]
+        }
+    )
+
+
+def _map_context(spec, scalar_space, tmp_path, moving_suffix='T1w'):
+    """A stub FactoryContext with touched reference files for map_scalar_to_surface.
+
+    ``moving_suffix`` is the modality of the QSIPrep ACPC anatomical (``T1w`` or, for
+    a ``--anat-modality T2w`` run, ``T2w``).
+    """
+    from bdt.engine.factories import FactoryContext
+    from bdt.engine.selection import DictDataProvider, Match
+
+    def touch(rel):
+        (tmp_path / rel).touch()
+        return str(tmp_path / rel)
+
+    provider = DictDataProvider(
+        {
+            'anat': [
+                Match(
+                    touch('sub-01_desc-preproc_T1w.nii.gz'),
+                    {'suffix': 'T1w', 'desc': 'preproc', 'datatype': 'anat'},
+                ),
+                Match(
+                    touch('sub-01_desc-brain_mask.nii.gz'),
+                    {'suffix': 'mask', 'desc': 'brain', 'datatype': 'anat'},
+                ),
+            ],
+            'qsiprep': [
+                Match(
+                    touch(f'sub-01_space-ACPC_desc-preproc_{moving_suffix}.nii.gz'),
+                    {
+                        'suffix': moving_suffix,
+                        'desc': 'preproc',
+                        'space': 'ACPC',
+                        'datatype': 'anat',
+                    },
+                ),
+                Match(
+                    touch('sub-01_space-ACPC_desc-brain_mask.nii.gz'),
+                    {'suffix': 'mask', 'desc': 'brain', 'space': 'ACPC', 'datatype': 'anat'},
+                ),
+            ],
+        }
+    )
+    resolved = {
+        'load_noddi': Match('/q/scalar.nii.gz', {'space': scalar_space, 'suffix': 'dwimap'}),
+        'surfaces': Match(
+            '/a/hemi-L_midthickness.surf.gii', {'suffix': 'midthickness', 'hemi': 'L'}
+        ),
+    }
+    return FactoryContext(
+        provider=provider,
+        subject='01',
+        spec=spec,
+        datasets=['anat', 'qsiprep', 'qsirecon'],
+        resolved=resolved,
+    )
+
+
+def test_map_scalar_to_surface_cross_space(tmp_path):
+    """A scalar in ACPC vs T1w surfaces compiles the computed-rigid + giftirs branch."""
+    from bdt.engine.factories import init_map_scalar_to_surface_wf
+
+    spec = _map_spec()
+    node = spec.by_name()['noddi_on_surface']
+    wf = init_map_scalar_to_surface_wf(node, context=_map_context(spec, 'ACPC', tmp_path))
+    names = set(wf.list_node_names())
+    for want in (
+        'register_acpc',
+        'extract_fixed',
+        'extract_moving',
+        'pick_xfm',
+        'warp_white_L',
+        'warp_midthickness_R',
+        'vol2surf_L',
+        'dilate_R',
+        'merge_hemis',
+    ):
+        assert want in names, f'missing {want}'
+    # rigid registration configured with the masked-brain preset
+    reg = wf.get_node('register_acpc')
+    assert reg.inputs.transforms == ['Rigid']
+    assert reg.inputs.metric == ['MI']
+
+
+def test_map_scalar_to_surface_accepts_t2w_acpc_anatomical(tmp_path):
+    """A --anat-modality T2w QSIPrep run: the ACPC moving image is a T2w, resolved
+    the same (rigid MI is contrast-agnostic; fixed stays the surfaces' T1w)."""
+    from bdt.engine.factories import init_map_scalar_to_surface_wf
+
+    spec = _map_spec()
+    node = spec.by_name()['noddi_on_surface']
+    ctx = _map_context(spec, 'ACPC', tmp_path, moving_suffix='T2w')
+    wf = init_map_scalar_to_surface_wf(node, context=ctx)
+    em = wf.get_node('extract_moving')
+    assert em.inputs.in_file.endswith('space-ACPC_desc-preproc_T2w.nii.gz')
+    # fixed remains the T1w that matches the surfaces' space
+    assert wf.get_node('extract_fixed').inputs.in_file.endswith('desc-preproc_T1w.nii.gz')
+
+
+def test_map_scalar_to_surface_same_space_no_registration(tmp_path):
+    """A T1w scalar onto T1w surfaces maps directly — no registration / warp nodes."""
+    from bdt.engine.factories import init_map_scalar_to_surface_wf
+
+    spec = _map_spec()
+    node = spec.by_name()['noddi_on_surface']
+    wf = init_map_scalar_to_surface_wf(node, context=_map_context(spec, 'T1w', tmp_path))
+    names = set(wf.list_node_names())
+    assert 'vol2surf_L' in names
+    assert 'dilate_R' in names
+    assert not any('register' in n or 'warp' in n or 'extract' in n for n in names)
+
+
+def test_map_scalar_to_surface_unsupported_cross_space_raises(tmp_path):
+    """Only T1w<->ACPC is computed; any other cross-space pairing errors clearly."""
+    from bdt.engine.factories import init_map_scalar_to_surface_wf
+
+    spec = _map_spec()
+    node = spec.by_name()['noddi_on_surface']
+    with pytest.raises(NotImplementedError, match='T1w'):
+        init_map_scalar_to_surface_wf(
+            node, context=_map_context(spec, 'MNI152NLin2009cAsym', tmp_path)
+        )
+
+
+def test_reference_detection_subject_vs_session_level():
+    """Anatomical reference resolution honours the subject- vs session-level anat level.
+
+    A BIDS anatomical may be session-level (`sub-X/ses-Y/anat`) or subject-level
+    (`sub-X/anat`, shared across sessions); the detection must pick the current
+    session's file, fall back to a session-less one, and never grab a *different*
+    session's file.
+    """
+    from bdt.engine.factories import FactoryContext
+    from bdt.engine.selection import DictDataProvider, Match
+
+    t1 = {'suffix': 'T1w', 'desc': 'preproc'}
+
+    def ctx(matches):
+        return FactoryContext(
+            provider=DictDataProvider({'anat': matches}), subject='01', datasets=['anat']
+        )
+
+    # multi-session, session-level -> pick the current session, not the other
+    multi = ctx(
+        [
+            Match(
+                '/a/sub-01_ses-1_desc-preproc_T1w.nii.gz',
+                {'sub': '01', 'ses': '1', 'suffix': 'T1w', 'desc': 'preproc'},
+            ),
+            Match(
+                '/a/sub-01_ses-2_desc-preproc_T1w.nii.gz',
+                {'sub': '01', 'ses': '2', 'suffix': 'T1w', 'desc': 'preproc'},
+            ),
+        ]
+    )
+    assert multi.aux_file('anat', t1, session='1').endswith('ses-1_desc-preproc_T1w.nii.gz')
+    assert multi.aux_file('anat', t1, session='2').endswith('ses-2_desc-preproc_T1w.nii.gz')
+
+    # subject-level anatomical (no ses) -> session-less fallback for session-scoped data
+    subj = ctx(
+        [
+            Match(
+                '/a/sub-01_desc-preproc_T1w.nii.gz',
+                {'sub': '01', 'suffix': 'T1w', 'desc': 'preproc'},
+            )
+        ]
+    )
+    assert subj.aux_file('anat', t1, session='1').endswith('sub-01_desc-preproc_T1w.nii.gz')
+
+    # never grab a different session's file: ses-1 data, only ses-2 anat -> error
+    other = ctx(
+        [
+            Match(
+                '/a/sub-01_ses-2_desc-preproc_T1w.nii.gz',
+                {'sub': '01', 'ses': '2', 'suffix': 'T1w', 'desc': 'preproc'},
+            )
+        ]
+    )
+    with pytest.raises(ValueError, match='expected exactly 1'):
+        other.aux_file('anat', t1, session='1')
 
 
 def test_missing_factory_raises():

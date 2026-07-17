@@ -416,10 +416,6 @@ class execution(_Config):
     """Do not convert boilerplate from MarkDown to LaTex and HTML."""
     notrack = False
     """Do not collect telemetry information for *BDT*."""
-    track_carbon = False
-    """Tracks power draws using CodeCarbon package."""
-    country_code = 'CAN'
-    """Country ISO code used by carbon trackers."""
     output_dir = None
     """Folder where derivatives will be stored."""
     aggr_ses_reports = None
@@ -433,8 +429,6 @@ class execution(_Config):
     """Unique identifier of this particular run."""
     participant_label = None
     """List of participant identifiers that are to be preprocessed."""
-    task_id = None
-    """Select a particular task from all available in the dataset."""
     templateflow_home = _templateflow_home
     """The root folder of the TemplateFlow client."""
     work_dir = Path('work').absolute()
@@ -544,13 +538,6 @@ class workflow(_Config):
     """Ignore particular steps for *BDT*."""
     cifti_output = None
     """Generate HCP Grayordinates, accepts either ``'91k'`` (default) or ``'170k'``."""
-    dummy_scans = None
-    """Set a number of initial scans to be considered nonsteady states."""
-    slice_time_ref = 0.5
-    """The time of the reference slice to correct BOLD values to, as a fraction
-    acquisition time. 0 indicates the start, 0.5 the midpoint, and 1 the end
-    of acquisition. The alias `start` corresponds to 0, and `middle` to 0.5.
-    The default value is 0.5."""
 
 
 class loggers:
