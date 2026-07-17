@@ -1,0 +1,70 @@
+nodes:
+# bundle tractograms (from a DSI Studio / GQI recon)
+# bundle-wise tck.gz files
+- name: load_bundles
+  action: select_data
+  dataset: qsirecon
+  filters:
+    model: gqi
+    bundle: AssociationArcuateFasciculusL
+    suffix: streamlines
+    extension: .tck.gz
+    space: ACPC
+
+# inline atlas construction: TDI -> binarize -> dseg
+# this needs to aggregate bundle-wise files into a single pseg file
+- name: bundle_rois
+  action: tractogram_to_dseg
+  inputs:
+    tractograms: load_bundles
+  parameters:
+    threshold: 0.0
+  write_outputs: true  # also emit the binarized bundle masks
+
+# CBF (ASLPrep) summarized over the bundle ROIs and along-tract
+- name: load_cbf
+  action: select_data
+  dataset: aslprep
+  filters:
+    space: MNI152NLin6Asym
+    suffix: cbf
+    extension: .nii.gz
+- name: cbf_roi
+  action: parcellate_scalar_as_roi
+  inputs:
+    scalar: load_cbf
+    atlas: bundle_rois  # warps ROI dseg -> CBF space
+  write_outputs: true
+- name: cbf_profile
+  action: parcellate_scalar_as_tract_profile
+  inputs:
+    scalar: load_cbf
+    bundles: load_bundles
+  parameters:
+    n_nodes: 100
+  write_outputs: true
+
+# FA (QSIRecon tensor) — same two summaries
+- name: load_fa
+  action: select_data
+  dataset: qsirecon
+  filters:
+    suffix: dwimap
+    model: tensor
+    param: fa
+    space: ACPC
+    extension: .nii.gz
+- name: fa_roi
+  action: parcellate_scalar_as_roi
+  inputs:
+    scalar: load_fa
+    atlas: bundle_rois
+  write_outputs: true
+- name: fa_profile
+  action: parcellate_scalar_as_tract_profile
+  inputs:
+    scalar: load_fa
+    bundles: load_bundles
+  parameters:
+    n_nodes: 100
+  write_outputs: true

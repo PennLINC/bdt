@@ -125,15 +125,15 @@ class DerivativeSink:
                 raise ValueError(
                     "Dataset-scope output requires a 'space' entity to form the tpl- folder."
                 )
-            for k in ('sub', 'ses'):
+            for k in ('subject', 'session'):
                 entities.pop(k, None)
             prefix = f'tpl-{space}'
             folder = prefix
         else:
-            sub = entities.get('sub')
+            sub = entities.get('subject')
             if not sub:
-                raise ValueError("Participant-scope output requires a 'sub' entity.")
-            ses = entities.get('ses')
+                raise ValueError("Participant-scope output requires a 'subject' entity.")
+            ses = entities.get('session')
             prefix_parts = [f'sub-{sub}'] + ([f'ses-{ses}'] if ses else [])
             prefix = '_'.join(prefix_parts)
             folder = f'sub-{sub}' + (f'/ses-{ses}' if ses else '')

@@ -6,4 +6,6 @@ bdt \
     --participant-label 125511 \
     --datasets \
     fmriprep=/mnt/c/Users/tsalo/Documents/datasets/ds008325/derivatives/fmriprep_func \
-    atlases=/mnt/c/Users/tsalo/Documents/datasets/AtlasPack
+    atlases=/mnt/c/Users/tsalo/Documents/datasets/AtlasPack \
+    --work-dir /mnt/c/Users/tsalo/Documents/datasets/ds008325-derivatives/bdt-nifti-parcellate-work \
+    --clean-workdir
