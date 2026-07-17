@@ -1,0 +1,18 @@
+nodes:
+- name: load_bold
+  action: select_data
+  dataset: fmriprep
+  filters: {space: MNI152NLin6Asym, desc: preproc, suffix: bold, extension: .nii.gz}
+- name: atlas_4s456
+  action: select_atlases
+  dataset: atlases
+  filters: {atlas: 4S456Parcels, template: MNI152NLin2009cAsym, extension: .nii.gz}
+- name: parcellate_bold
+  action: parcellate_timeseries
+  inputs: {timeseries: load_bold, atlas: atlas_4s456}
+  parameters: {min_coverage: 0.5}
+  write_outputs: true
+- name: fc_bold
+  action: functional_connectivity
+  inputs: {timeseries: parcellate_bold}
+  write_outputs: true
