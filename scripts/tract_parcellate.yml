@@ -6,7 +6,8 @@ nodes:
   dataset: qsirecon
   filters:
     model: gqi
-    bundle: AssociationArcuateFasciculusL
+    # XXX: Query.ANY, Query.ALL, and Query.NONE should be converted to the PyBIDS objects before querying.
+    bundle: Query.ANY
     suffix: streamlines
     extension: .tck.gz
     space: ACPC
@@ -14,11 +15,11 @@ nodes:
 # inline atlas construction: TDI -> binarize -> dseg
 # this needs to aggregate bundle-wise files into a single pseg file
 - name: bundle_rois
-  action: tractogram_to_dseg
+  action: tractogram_to_pseg
   inputs:
     tractograms: load_bundles
   parameters:
-    threshold: 0.0
+    threshold: 0.0  # enables binarization to 4D dseg
   write_outputs: true  # also emit the binarized bundle masks
 
 # CBF (ASLPrep) summarized over the bundle ROIs and along-tract

@@ -613,3 +613,79 @@ def init_map_scalar_to_surface_wf(node, name=None, context=None) -> pe.Workflow:
 
     wf.connect([(merge, outputnode, [('out', 'out')])])
     return wf
+
+
+@workflow_factory('tractogram_to_pseg')
+def init_tractogram_to_pseg_wf(node, name=None, context=None) -> pe.Workflow:
+    """Convert a list of tractogram files (tck.gz format) to a NIfTI pseg.
+
+    First, use tckmap from mrtrix3 to convert each bundle-wise tck.gz file to a TDI NIfTI file.
+    This requires the tck.gz file in ACPC space and a reference NIfTI in the same space.
+    Then concatenate the TDI NIfTI files over time to create a 4D probabilistic segmentation NIfTI file.
+    Optionally apply a threshold to binarize the pseg file.
+
+    The bundle names will also have to be inferred from the input files and passed into a TSV
+    indicating which volume in the NIfTI corresponds to which bundle.
+    This should be in BIDS dseg/pseg format (i.e., two required columns: index and name).
+    If threshold is not None/Undefined and write_outputs is True, the output file should have
+    probseg suffix. If write_outputs is True and threshold is a number, the output file should
+    have dseg suffix.
+    """
+    context = context or FactoryContext()
+    threshold = context.role_space(node, 'threshold', default=None)
+
+    wf = pe.Workflow(name=name or node.name)
+    inputnode = pe.Node(niu.IdentityInterface(fields=['tractograms', 'reference_file']), name='inputnode')
+    outputnode = pe.Node(niu.IdentityInterface(fields=['seg', 'tsv']), name='outputnode')
+
+    # TODO: Implement and validate workflow. Code below is non-working pseudocode.
+    # Step 1: Use a MapNode to convert tck.gz files to TDI NIfTI files.
+    tck_to_nii = pe.MapNode(
+        Tckmap(),
+        iterfield=['in_file'],
+        name='tck_to_nii',
+    )
+    wf.connect([
+        (inputnode, tck_to_nii, [
+            ('tractograms', 'in_file'),
+            ('reference_file', 'reference'),
+        ]),
+    ])  # fmt:skip
+
+    # Step 2: Concatenate NIfTIs in fourth dimension
+    concatenate_niis = pe.Node(
+        ConcatenateNiftis(),
+        name='concatenate_niis',
+    )
+    wf.connect([(tck_to_nii, concatenate_niis, [('out_file', 'in_files')])])
+
+    # Step 3: Binarize 4D NIfTI if threshold is provided
+    seg_buffer = pe.Node(niu.IdentityInterface(fields=['seg_file'], name='seg_buffer'))
+    if threshold:
+        threshold_nii = pe.Node(
+            ThresholdNifti(threshold=threshold, binarize=True),
+            name='threshold_nii',
+        )
+        wf.connect([
+            (concatenate_niis, threshold_nii, [('out_file', 'in_file')]),
+            (threshold_nii, seg_buffer, [('out_file', 'seg_file')]),
+        ])  # fmt:skip
+    else:
+        wf.connect([
+            (concatenate_niis, seg_buffer, [('out_file', 'seg_file')]),
+        ])  # fmt:skip
+
+    # Keeping seg_buffer for now in case we need to add a DataSink before the outputnode
+    wf.connect([(seg_buffer, outputnode, [('seg_file', 'seg')])])
+
+    # Step 4: Extract bundle names and compile in TSV
+    bundles_to_tsv = pe.Node(
+        EntitiesToSegTSV(entity='bundle'),
+        name='bundles_to_tsv',
+    )
+    wf.connect([
+        (inputnode, bundles_to_tsv, [('tractograms', 'in_files')]),
+        (bundles_to_tsv, outputnode, [('out_file', 'tsv')]),
+    ])  # fmt:skip
+
+    return wf

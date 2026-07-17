@@ -389,7 +389,7 @@ _ACTIONS: tuple[ActionSpec, ...] = (
     ),
     # -- streamlines + tract actions (Strategy B / trxrs) ------------------
     ActionSpec(
-        'tractogram_to_dseg',
+        'tractogram_to_pseg',
         PROCESSING,
         'atlas',
         roles=(_r('tractograms', 'streamlines', fan_out=False),),
