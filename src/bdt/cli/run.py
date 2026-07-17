@@ -1,7 +1,7 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 #
-# Copyright 2024 The NiPreps Developers <nipreps@gmail.com>
+# Copyright The NiPreps Developers <nipreps@gmail.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,250 +20,72 @@
 #
 #     https://www.nipreps.org/community/licensing/
 #
-"""fMRI post-processing template workflow."""
+"""BDT command-line entry point.
 
-from bdt import config
+Parses the BIDS-App-style invocation
+``bdt <bids_dir> <output_dir> participant --datasets k=path … --spec spec.yaml``
+and runs the node-graph pipeline (:func:`bdt.engine.pipeline.run_spec`): load +
+statically validate the spec, resolve each selection against the ``--datasets``
+roots, compile to a nipype ``Workflow``, and execute it per participant.
+"""
 
-EXITCODE: int = -1
+from __future__ import annotations
+
+import sys
 
 
-def main():
-    """Entry point."""
+def main(argv: list[str] | None = None) -> int:
+    """Parse arguments and run a BDT spec; return a process exit code."""
+    from bdt.cli.parser import _build_parser
+    from bdt.engine.pipeline import run_spec
+    from bdt.engine.selection import SelectionError
+    from bdt.spec.model import SpecError
 
-    import gc
-    import sys
-    from multiprocessing import Manager, Process
-    from os import EX_SOFTWARE
-    from pathlib import Path
+    # The parser restricts ``analysis_level`` to ``participant`` (the only scope the
+    # node-graph engine runs today), so an invalid level exits here via argparse.
+    opts = _build_parser().parse_args(argv)
 
-    from bdt.cli.parser import parse_args
-    from bdt.cli.workflow import build_workflow
-    from bdt.utils.bids import write_bidsignore, write_derivative_description
+    if not opts.datasets:
+        print('bdt: at least one --datasets KEY=PATH is required.', file=sys.stderr)
+        return 2
 
-    parse_args()
+    datasets = {k: str(v) for k, v in opts.datasets.items()}
+    work_dir = opts.work_dir / 'bdt_wf'
+    # A single worker runs the fast, single-process Linear plugin; >1 fans the
+    # nipype graph across processes with MultiProc.
+    nprocs = opts.nprocs or 1
+    plugin = 'MultiProc' if nprocs > 1 else 'Linear'
+    plugin_args = {'n_procs': nprocs} if plugin == 'MultiProc' else None
 
-    # Code Carbon
-    if config.execution.track_carbon:
-        from codecarbon import OfflineEmissionsTracker
+    print(f'bdt: running spec {opts.spec!r}')
+    print(f'bdt: datasets = {datasets}')
+    print(f'bdt: output   = {opts.output_dir}')
+    print(f'bdt: subjects = {opts.participant_label or "(auto-discover)"}')
+    print(f'bdt: plugin   = {plugin} (n_procs={nprocs})')
 
-        country_iso_code = config.execution.country_code
-        config.loggers.workflow.log(25, 'CodeCarbon tracker started ...')
-        config.loggers.workflow.log(25, f'Using country_iso_code: {country_iso_code}')
-        config.loggers.workflow.log(25, f'Saving logs at: {config.execution.log_dir}')
-
-        tracker = OfflineEmissionsTracker(
-            output_dir=config.execution.log_dir, country_iso_code=country_iso_code
-        )
-        tracker.start()
-
-    if 'pdb' in config.execution.debug:
-        from bdt.utils.debug import setup_exceptionhook
-
-        setup_exceptionhook()
-        config.nipype.plugin = 'Linear'
-
-    sentry_sdk = None
-    if not config.execution.notrack and not config.execution.debug:
-        import atexit
-
-        import sentry_sdk
-
-        from bdt.utils.telemetry import sentry_setup, setup_migas
-
-        sentry_setup()
-        setup_migas(init_ping=True)
-        atexit.register(migas_exit)
-
-    # CRITICAL Save the config to a file. This is necessary because the execution graph
-    # is built as a separate process to keep the memory footprint low. The most
-    # straightforward way to communicate with the child process is via the filesystem.
-    config_file = config.execution.work_dir / config.execution.run_uuid / 'config.toml'
-    config_file.parent.mkdir(exist_ok=True, parents=True)
-    config.to_filename(config_file)
-
-    # CRITICAL Call build_workflow(config_file, retval) in a subprocess.
-    # Because Python on Linux does not ever free virtual memory (VM), running the
-    # workflow construction jailed within a process preempts excessive VM buildup.
-    if 'pdb' not in config.execution.debug:
-        with Manager() as mgr:
-            retval = mgr.dict()
-            p = Process(target=build_workflow, args=(str(config_file), retval))
-            p.start()
-            p.join()
-            retval = dict(retval.items())  # Convert to base dictionary
-
-            if p.exitcode:
-                retval['return_code'] = p.exitcode
-
-    else:
-        retval = build_workflow(str(config_file), {})
-
-    global EXITCODE
-    EXITCODE = retval.get('return_code', 0)
-    bdt_wf = retval.get('workflow', None)
-
-    # CRITICAL Load the config from the file. This is necessary because the ``build_workflow``
-    # function executed constrained in a process may change the config (and thus the global
-    # state of BDT).
-    config.load(config_file)
-
-    if config.execution.reports_only:
-        sys.exit(int(EXITCODE > 0))
-
-    if bdt_wf and config.execution.write_graph:
-        bdt_wf.write_graph(graph2use='colored', format='svg', simple_form=True)
-
-    EXITCODE = EXITCODE or (bdt_wf is None) * EX_SOFTWARE
-    if EXITCODE != 0:
-        sys.exit(EXITCODE)
-
-    # Generate boilerplate
-    with Manager() as mgr:
-        from bdt.cli.workflow import build_boilerplate
-
-        p = Process(target=build_boilerplate, args=(str(config_file), bdt_wf))
-        p.start()
-        p.join()
-
-    if config.execution.boilerplate_only:
-        sys.exit(int(EXITCODE > 0))
-
-    # Clean up master process before running workflow, which may create forks
-    gc.collect()
-
-    # Sentry tracking
-    if sentry_sdk is not None:
-        with sentry_sdk.configure_scope() as scope:
-            scope.set_tag('run_uuid', config.execution.run_uuid)
-            scope.set_tag('npart', len(config.execution.participant_label))
-        sentry_sdk.add_breadcrumb(message='BDT started', level='info')
-        sentry_sdk.capture_message('BDT started', level='info')
-
-    config.loggers.workflow.log(
-        15,
-        '\n'.join(['BDT config:'] + [f'\t\t{s}' for s in config.dumps().splitlines()]),
-    )
-    config.loggers.workflow.log(25, 'BDT started!')
-    errno = 1  # Default is error exit unless otherwise set
     try:
-        bdt_wf.run(**config.nipype.get_plugin())
-    except Exception as e:
-        if not config.execution.notrack:
-            from bdt.utils.telemetry import process_crashfile
-
-            crashfolders = [
-                config.execution.output_dir / f'sub-{s}' / 'log' / config.execution.run_uuid
-                for s in config.execution.participant_label
-            ]
-            for crashfolder in crashfolders:
-                for crashfile in crashfolder.glob('crash*.*'):
-                    process_crashfile(crashfile)
-
-            if sentry_sdk is not None and 'Workflow did not execute cleanly' not in str(e):
-                sentry_sdk.capture_exception(e)
-
-        config.loggers.workflow.critical('BDT failed: %s', e)
-        raise
-
-    else:
-        config.loggers.workflow.log(25, 'BDT finished successfully!')
-        if sentry_sdk is not None:
-            success_message = 'BDT finished without errors'
-            sentry_sdk.add_breadcrumb(message=success_message, level='info')
-            sentry_sdk.capture_message(success_message, level='info')
-
-        # Bother users with the boilerplate only iff the workflow went okay.
-        boiler_file = config.execution.output_dir / 'logs' / 'CITATION.md'
-        if boiler_file.exists():
-            if config.environment.exec_env in (
-                'singularity',
-                'docker',
-                'bdt-docker',
-            ):
-                boiler_file = Path('<OUTPUT_PATH>') / boiler_file.relative_to(
-                    config.execution.output_dir
-                )
-
-            config.loggers.workflow.log(
-                25,
-                'Works derived from this BDT execution should include the '
-                f'boilerplate text found in {boiler_file}.',
-            )
-
-        if config.workflow.run_reconall:
-            from niworkflows.utils.misc import _copy_any
-            from templateflow import api
-
-            dseg_tsv = str(api.get('fsaverage', suffix='dseg', extension=['.tsv']))
-            _copy_any(dseg_tsv, str(config.execution.output_dir / 'desc-aseg_dseg.tsv'))
-            _copy_any(dseg_tsv, str(config.execution.output_dir / 'desc-aparcaseg_dseg.tsv'))
-        errno = 0
-    finally:
-        # Code Carbon
-        if config.execution.track_carbon:
-            emissions: float = tracker.stop()
-            config.loggers.workflow.log(25, 'CodeCarbon tracker has stopped.')
-            config.loggers.workflow.log(25, f'Saving logs at: {config.execution.log_dir}')
-            config.loggers.workflow.log(25, f'Carbon emissions: {emissions} kg')
-
-        from bdt.reports.core import generate_reports
-
-        # Generate reports phase
-        failed_reports = generate_reports(
-            subject_list=config.execution.participant_label,
-            output_dir=config.execution.output_dir,
-            run_uuid=config.execution.run_uuid,
+        results = run_spec(
+            opts.spec,
+            datasets,
+            opts.output_dir,
+            work_dir,
+            subjects=opts.participant_label or None,
+            plugin=plugin,
+            plugin_args=plugin_args,
         )
-        write_derivative_description(
-            input_dir=config.execution.bids_dir,
-            output_dir=config.execution.output_dir,
-            dataset_links=config.execution.dataset_links,
-        )
-        write_bidsignore(config.execution.output_dir)
+    except (SpecError, SelectionError, KeyError) as exc:
+        # spec/validation and resolution errors are user errors -> a clean message
+        print(f'bdt: {type(exc).__name__}: {exc}', file=sys.stderr)
+        return 1
 
-        if sentry_sdk is not None and failed_reports:
-            sentry_sdk.capture_message(
-                f'Report generation failed for {failed_reports} subjects',
-                level='error',
-            )
-        sys.exit(int((errno + len(failed_reports)) > 0))
-
-
-def migas_exit() -> None:
-    """Exit migas.
-
-    Send a final crumb to the migas server signaling if the run successfully completed
-    This function should be registered with `atexit` to run at termination.
-    """
-    import sys
-
-    from bdt.utils.telemetry import send_breadcrumb
-
-    global EXITCODE
-    migas_kwargs = {'status': 'C'}
-    # `sys` will not have these attributes unless an error has been handled
-    if hasattr(sys, 'last_type'):
-        migas_kwargs = {
-            'status': 'F',
-            'status_desc': 'Finished with error(s)',
-            'error_type': sys.last_type,
-            'error_desc': sys.last_value,
-        }
-    elif EXITCODE != 0:
-        migas_kwargs.update(
-            {
-                'status': 'F',
-                'status_desc': f'Completed with exitcode {EXITCODE}',
-            }
-        )
-    else:
-        migas_kwargs['status_desc'] = 'Success'
-
-    send_breadcrumb(**migas_kwargs)
+    n_outputs = sum(len(r.outputs) for r in results)
+    print(f'bdt: finished — {len(results)} scope(s), {n_outputs} derivative file(s) written.')
+    for r in results:
+        label = r.subject or 'dataset'
+        for path in r.outputs:
+            print(f'  [{label}] {path}')
+    return 0
 
 
 if __name__ == '__main__':
-    raise RuntimeError(
-        'bdt/cli/run.py should not be run directly;\n'
-        'Please `pip install` bdt and use the `bdt` command'
-    )
+    sys.exit(main())

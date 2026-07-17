@@ -22,8 +22,6 @@
 #
 """Parser."""
 
-import sys
-
 from bdt import config
 
 
@@ -36,12 +34,6 @@ def _build_parser(**kwargs):
     from argparse import Action, ArgumentDefaultsHelpFormatter, ArgumentParser
     from functools import partial
     from pathlib import Path
-
-    from packaging.version import Version
-
-    from bdt.cli.version import check_latest, is_flagged
-
-    # from niworkflows.utils.spaces import OutputReferencesAction
 
     class ToDict(Action):
         def __call__(self, parser, namespace, values, option_string=None):
@@ -89,29 +81,7 @@ def _build_parser(**kwargs):
     def _drop_sub(value):
         return value[4:] if value.startswith('sub-') else value
 
-    def _filter_pybids_none_any(dct):
-        import bids
-
-        return {
-            k: bids.layout.Query.NONE if v is None else (bids.layout.Query.ANY if v == '*' else v)
-            for k, v in dct.items()
-        }
-
-    def _bids_filter(value, parser):
-        from json import JSONDecodeError, loads
-
-        if value:
-            if Path(value).exists():
-                try:
-                    return loads(Path(value).read_text(), object_hook=_filter_pybids_none_any)
-                except JSONDecodeError as e:
-                    raise parser.error(f'JSON syntax error in: <{value}>.') from e
-            else:
-                raise parser.error(f'Path does not exist: <{value}>.')
-
     verstr = f'BDT v{config.environment.version}'
-    currentv = Version(config.environment.version)
-    is_release = not any((currentv.is_devrelease, currentv.is_prerelease, currentv.is_postrelease))
 
     parser = ArgumentParser(
         description=f'BDT: BIDS Derivatives Transformer v{config.environment.version}',
@@ -121,7 +91,6 @@ def _build_parser(**kwargs):
     PathExists = partial(_path_exists, parser=parser)
     IsFile = partial(_is_file, parser=parser)
     PositiveInt = partial(_min_one, parser=parser)
-    BIDSFilter = partial(_bids_filter, parser=parser)
 
     # Arguments as specified by BIDS-Apps
     # required, positional arguments
@@ -170,35 +139,26 @@ def _build_parser(**kwargs):
         ),
     )
     g_bids.add_argument(
-        '-t',
-        '--task-id',
-        action='store',
-        help='Select a specific task to be processed',
-    )
-    g_bids.add_argument(
-        '--bids-filter-file',
-        dest='bids_filters',
-        action='store',
-        type=BIDSFilter,
-        metavar='FILE',
-        help=(
-            'A JSON file describing custom BIDS input filters using PyBIDS. '
-            'For further details, please check out '
-            'https://fmriprep.readthedocs.io/en/'
-            f'{currentv.base_version if is_release else "latest"}/faq.html#'
-            'how-do-I-select-only-certain-files-to-be-input-to-fMRIPrep'
-        ),
-    )
-    g_bids.add_argument(
         '-d',
         '--datasets',
         action=ToDict,
         metavar='PACKAGE=PATH',
         nargs='+',
         help=(
-            'Search PATH(s) for pre-computed derivatives. '
-            'These may be provided as named folders '
-            '(e.g., `--datasets smriprep=/path/to/smriprep`).'
+            'Search PATH(s) for pre-computed derivatives and atlases. '
+            'These must be provided as named folders '
+            '(e.g., `--datasets smriprep=/path/to/smriprep atlases=/path/to/atlases`); '
+            'the names are what selection nodes reference in the spec.'
+        ),
+    )
+    g_bids.add_argument(
+        '--spec',
+        required=True,
+        action='store',
+        metavar='SPEC',
+        help=(
+            'The BDT node-graph spec: a path to a YAML/JSON file, or the name of a '
+            'pre-packaged spec. Defines the selection and processing nodes to run.'
         ),
     )
     g_bids.add_argument(
@@ -280,81 +240,12 @@ def _build_parser(**kwargs):
 
     g_conf = parser.add_argument_group('Workflow configuration')
     g_conf.add_argument(
-        '--ignore',
-        required=False,
-        action='store',
-        nargs='+',
-        default=['fieldmaps'],
-        choices=['fieldmaps', 'slicetiming', 'fmap-jacobian'],
-        help=(
-            'Ignore selected aspects of the input dataset to disable corresponding '
-            'parts of the resampling workflow (a space delimited list)'
-        ),
-    )
-    # Disable output spaces until warping works
-    # g_conf.add_argument(
-    #     '--output-spaces',
-    #     nargs='*',
-    #     action=OutputReferencesAction,
-    #     help="""\
-    # Standard and non-standard spaces to resample denoised functional images to. \
-    # Standard spaces may be specified by the form \
-    # ``<SPACE>[:cohort-<label>][:res-<resolution>][...]``, where ``<SPACE>`` is \
-    # a keyword designating a spatial reference, and may be followed by optional, \
-    # colon-separated parameters. \
-    # Non-standard spaces imply specific orientations and sampling grids. \
-    # For further details, please check out \
-    # https://fmriprep.readthedocs.io/en/%s/spaces.html"""
-    #    % (currentv.base_version if is_release else 'latest'),
-    # )
-    g_conf.add_argument(
-        '--dummy-scans',
-        required=False,
-        action='store',
-        default=None,
-        type=int,
-        help='Number of nonsteady-state volumes. Overrides automatic detection.',
-    )
-    g_conf.add_argument(
         '--random-seed',
         dest='_random_seed',
         action='store',
         type=int,
         default=None,
         help='Initialize the random seed for the workflow',
-    )
-
-    g_outputs = parser.add_argument_group('Options for modulating outputs')
-    g_outputs.add_argument(
-        '--md-only-boilerplate',
-        action='store_true',
-        default=False,
-        help='Skip generation of HTML and LaTeX formatted citation with pandoc',
-    )
-    g_outputs.add_argument(
-        '--aggregate-session-reports',
-        dest='aggr_ses_reports',
-        action='store',
-        type=PositiveInt,
-        default=4,
-        help=(
-            "Maximum number of sessions aggregated in one subject's visual report. "
-            'If exceeded, visual reports are split by session.'
-        ),
-    )
-
-    g_carbon = parser.add_argument_group('Options for carbon usage tracking')
-    g_carbon.add_argument(
-        '--track-carbon',
-        action='store_true',
-        help='Tracks power draws using CodeCarbon package',
-    )
-    g_carbon.add_argument(
-        '--country-code',
-        action='store',
-        default='CAN',
-        type=str,
-        help='Country ISO code used by carbon trackers',
     )
 
     g_other = parser.add_argument_group('Other options')
@@ -423,29 +314,6 @@ def _build_parser(**kwargs):
         choices=config.DEBUG_MODES + ('all',),
         help="Debug mode(s) to enable. 'all' is alias for all available modes.",
     )
-
-    latest = check_latest()
-    if latest is not None and currentv < latest:
-        print(
-            f"""\
-You are using BDT-{currentv},
-and a newer version of BDT is available: {latest}.
-Please check out our documentation about how and when to upgrade:
-https://fmriprep.readthedocs.io/en/latest/faq.html#upgrading""",
-            file=sys.stderr,
-        )
-
-    _blist = is_flagged()
-    if _blist[0]:
-        _reason = _blist[1] or 'unknown'
-        print(
-            f"""\
-WARNING: Version {config.environment.version} of BDT (current) has been FLAGGED
-(reason: {_reason}).
-That means some severe flaw was found in it and we strongly
-discourage its usage.""",
-            file=sys.stderr,
-        )
 
     return parser
 

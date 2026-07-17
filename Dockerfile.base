@@ -1,16 +1,21 @@
-## BDT base image: runtime dependencies without the bdt package
+## BDT base image: runtime tools for the node-graph engine (MRtrix-free).
 ##
-## MIT License
+## Ships:  Connectome Workbench (wb_command) + the Rust binaries giftirs + trxrs.
+## Drops:  AFNI (BOLD/fMRIPrep cruft — the node graph does not use it).
+## Not here: ANTs — the engine uses ANTsPy (antspyx), a pip dep in the app image.
 ##
-## Copyright (c)
+## NOTE — this image could not be build-tested locally; two things need a real
+## `docker build` to confirm (search "VERIFY" below): the Workbench 2.x download
+## URL and its Qt6 runtime libs.
 ##
-## See LICENSE for details.
+## MIT License — see LICENSE for details.
 
-# Ubuntu 22.04 LTS - Jammy
+# Ubuntu 22.04 LTS - Jammy (glibc 2.35; the Rust builder MUST match this so the
+# statically-linked binaries load — never build them on bookworm/glibc 2.36).
 ARG BASE_IMAGE=ubuntu:jammy-20250730
 
 #
-# Download stages
+# Download / build stages
 #
 
 FROM ${BASE_IMAGE} AS downloader
@@ -18,8 +23,8 @@ ENV DEBIAN_FRONTEND="noninteractive" \
     LANG="en_US.UTF-8" \
     LC_ALL="en_US.UTF-8"
 
-# Bump the date to refresh curl/certificates/etc
-RUN echo "2026.03.23"
+# Bump this date to refresh curl/certificates and bust the download cache.
+RUN echo "2026.07.17"
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
                     binutils \
@@ -29,35 +34,43 @@ RUN apt-get update && \
                     unzip && \
     apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-# AFNI (keep only a minimal subset as in aslprep)
-FROM downloader AS afni
-RUN mkdir -p /opt/afni-latest \
-    && curl -fsSL --retry 5 https://afni.nimh.nih.gov/pub/dist/tgz/linux_openmp_64.tgz \
-    | tar -xz -C /opt/afni-latest --strip-components 1 \
-    --exclude "linux_openmp_64/*.gz" \
-    --exclude "linux_openmp_64/funstuff" \
-    --exclude "linux_openmp_64/shiny" \
-    --exclude "linux_openmp_64/afnipy" \
-    --exclude "linux_openmp_64/lib/RetroTS" \
-    --exclude "linux_openmp_64/lib_RetroTS" \
-    --exclude "linux_openmp_64/meica.libs" \
-    && find /opt/afni-latest -type f -not \( \
-        -name "3dTshift" -or \
-        -name "3dUnifize" -or \
-        -name "3dAutomask" -or \
-        -name "3dAutobox" -or \
-        -name "3dresample" -or \
-        -name "3dZeropad" -or \
-        -name "3dvolreg" \) -delete
-
-# Connectome Workbench 2.x (qt6 variant not needed here; use stock zip)
+# Connectome Workbench — bumped 1.5.0 -> 2.0.x to match the version every recipe
+# in this project was validated against (2.0.1).  2.x is Qt6-based (1.5.0 was Qt5).
 FROM downloader AS workbench
+ARG WB_VERSION=2.0.1
+# VERIFY: confirm this exact URL/filename on humanconnectome.org (2.x may ship a
+# different archive name / a qt6 suffix).  wb_command (CLI) is all we need here.
 RUN mkdir /opt/workbench && \
-    curl -sSLO https://www.humanconnectome.org/storage/app/media/workbench/workbench-linux64-v1.5.0.zip && \
-    unzip workbench-linux64-v1.5.0.zip -d /opt && \
-    rm workbench-linux64-v1.5.0.zip && \
-    rm -rf /opt/workbench/libs_linux64_software_opengl /opt/workbench/plugins_linux64 && \
-    strip --remove-section=.note.ABI-tag /opt/workbench/libs_linux64/libQt5Core.so.5
+    curl -sSLO https://www.humanconnectome.org/storage/app/media/workbench/workbench-linux64-v${WB_VERSION}.zip && \
+    unzip workbench-linux64-v${WB_VERSION}.zip -d /opt && \
+    rm workbench-linux64-v${WB_VERSION}.zip && \
+    rm -rf /opt/workbench/libs_linux64_software_opengl /opt/workbench/plugins_linux64
+
+# NOTE: ANTs is NOT installed here — the engine uses ANTsPy (antspyx), a pip
+# dependency in the app image, for the one registration it computes (T1w<->ACPC).
+
+# Rust binaries — giftirs (surface point-warp) + trxrs (streamlines).  The crates
+# live in separate GitHub repos (NOT in the build context), so install by git tag.
+# Every crate builds hdf5 statically (hdf5-metno), so no system libhdf5 is needed.
+FROM ${BASE_IMAGE} AS rustbuild
+ENV DEBIAN_FRONTEND="noninteractive"
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+                    build-essential \
+                    ca-certificates \
+                    cmake \
+                    curl \
+                    git \
+                    perl \
+                    pkg-config && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
+        sh -s -- -y --profile minimal --default-toolchain stable
+ENV PATH="/root/.cargo/bin:${PATH}"
+# itk-transforms-rs is an (unpinned) git dependency of both crates; the pinned
+# tags below build reproducibly from each crate's committed Cargo.lock.
+RUN cargo install --git https://github.com/pennlinc/gifti-rs.git --tag v0.1.0 --bin giftirs --root /opt/rust
+RUN cargo install --git https://github.com/tee-ar-ex/trx-rs.git --tag v0.1.0 --bin trxrs --root /opt/rust
 
 #
 # Main stage
@@ -68,52 +81,34 @@ ENV DEBIAN_FRONTEND="noninteractive" \
     LANG="en_US.UTF-8" \
     LC_ALL="en_US.UTF-8"
 
-# Baseline system packages (libs for Workbench/AFNI)
+# Baseline system packages.  Workbench 2.x is Qt6-based; libglib/libgl cover its
+# headless (wb_command) runtime.  libgomp/openblas are for ANTs.
+# VERIFY: a Qt6 wb_command may pull additional libs (e.g. libegl1, libglx-mesa0);
+# add them here if `wb_command -version` fails to load in a test build.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
                     bc \
                     ca-certificates \
                     curl \
                     git \
-                    gnupg \
+                    libgl1 \
+                    libglib2.0-0 \
                     libgomp1 \
                     libopenblas0-openmp \
-                    lsb-release \
-                    netbase \
-                    xvfb && \
+                    netbase && \
     apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-# Legacy libs needed by AFNI/Workbench
-RUN apt-get update -qq \
-    && apt-get install -y -q --no-install-recommends \
-           ed \
-           gsl-bin \
-           libglib2.0-0 \
-           libglu1-mesa-dev \
-           libglw1-mesa \
-           libjpeg62 \
-           netpbm \
-           tcsh \
-           xfonts-base \
-    && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
-# Install from download stages
-COPY --link --from=afni /opt/afni-latest /opt/afni-latest
+# Install from the build stages
 COPY --link --from=workbench /opt/workbench /opt/workbench
+COPY --link --from=rustbuild /opt/rust/bin /opt/rust/bin
 
-# AFNI config
-ENV PATH="/opt/afni-latest:$PATH" \
-    AFNI_IMSAVE_WARNINGS="NO" \
-    AFNI_PLUGINPATH="/opt/afni-latest"
-
-# Workbench config
-ENV PATH="/opt/workbench/bin_linux64:$PATH" \
+ENV PATH="/opt/workbench/bin_linux64:/opt/rust/bin:$PATH" \
     LD_LIBRARY_PATH="/opt/workbench/lib_linux64:$LD_LIBRARY_PATH"
 
 RUN ldconfig
 WORKDIR /tmp
 
 LABEL org.label-schema.name="bdt-base" \
-      org.label-schema.description="BDT base image - runtime dependencies without the bdt package" \
+      org.label-schema.description="BDT base image - Workbench + Rust (giftirs/trxrs), MRtrix-free" \
       org.label-schema.url="https://github.com/nipreps/bdt" \
       org.label-schema.schema-version="1.0"

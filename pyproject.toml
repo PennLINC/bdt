@@ -17,12 +17,16 @@ classifiers = [
 ]
 dependencies = [
   "acres",
+  "antspyx >= 0.5",  # ANTsPy — the computed T1w<->ACPC rigid registration (no ANTs CLI)
   "fmriprep @ git+https://github.com/nipreps/fmriprep.git@master",
+  "networkx >= 3.0",
   "nipype >= 1.8.5",
   "nireports @ git+https://github.com/nipreps/nireports.git@main",
   "nitransforms >= 24.0.2",
   "niworkflows @ git+https://github.com/nipreps/niworkflows.git@master",
+  "nilearn >= 0.10",
   "pybids >= 0.15.6",
+  "pyyaml",
   "sdcflows @ git+https://github.com/nipreps/sdcflows.git@main",
   "smriprep @ git+https://github.com/nipreps/smriprep.git@master",
   "typer",
