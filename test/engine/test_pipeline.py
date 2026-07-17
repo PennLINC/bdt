@@ -23,6 +23,7 @@
 """Driver tests: tool-free unit tests for resolution/fan-out/collision, plus a
 gated end-to-end run on the real GRMPY test data when wb_command is present."""
 
+import importlib.util
 import shutil
 from pathlib import Path
 
@@ -250,11 +251,13 @@ requires_real = pytest.mark.skipif(
     reason='needs wb_command on PATH and the GRMPY test data + AtlasPack mounted',
 )
 
-# The cross-space surface path also needs the point-warp + registration binaries.
-_HAVE_WARP_TOOLS = all(shutil.which(t) for t in ('wb_command', 'giftirs', 'antsRegistration'))
+# The cross-space surface path needs wb_command + giftirs on PATH and antspyx
+# (ANTsPy) importable for the computed T1w<->ACPC registration.
+_HAVE_ANTSPY = importlib.util.find_spec('ants') is not None
+_HAVE_WARP_TOOLS = all(shutil.which(t) for t in ('wb_command', 'giftirs')) and _HAVE_ANTSPY
 requires_surface_warp = pytest.mark.skipif(
     not (_HAVE_WARP_TOOLS and _DATA.exists()),
-    reason='needs wb_command + giftirs + antsRegistration on PATH and the GRMPY data',
+    reason='needs wb_command + giftirs on PATH, antspyx installed, and the GRMPY data',
 )
 
 

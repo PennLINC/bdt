@@ -347,9 +347,6 @@ def test_map_scalar_to_surface_cross_space(tmp_path):
     names = set(wf.list_node_names())
     for want in (
         'register_acpc',
-        'extract_fixed',
-        'extract_moving',
-        'pick_xfm',
         'warp_white_L',
         'warp_midthickness_R',
         'vol2surf_L',
@@ -357,10 +354,12 @@ def test_map_scalar_to_surface_cross_space(tmp_path):
         'merge_hemis',
     ):
         assert want in names, f'missing {want}'
-    # rigid registration configured with the masked-brain preset
+    # the single ANTsPy registration node is wired to the resolved T1w (fixed) + ACPC
+    # (moving) anatomicals + their brain masks
     reg = wf.get_node('register_acpc')
-    assert reg.inputs.transforms == ['Rigid']
-    assert reg.inputs.metric == ['MI']
+    assert reg.inputs.fixed_image.endswith('desc-preproc_T1w.nii.gz')
+    assert reg.inputs.moving_image.endswith('space-ACPC_desc-preproc_T1w.nii.gz')
+    assert reg.inputs.fixed_mask.endswith('desc-brain_mask.nii.gz')
 
 
 def test_map_scalar_to_surface_accepts_t2w_acpc_anatomical(tmp_path):
@@ -372,10 +371,10 @@ def test_map_scalar_to_surface_accepts_t2w_acpc_anatomical(tmp_path):
     node = spec.by_name()['noddi_on_surface']
     ctx = _map_context(spec, 'ACPC', tmp_path, moving_suffix='T2w')
     wf = init_map_scalar_to_surface_wf(node, context=ctx)
-    em = wf.get_node('extract_moving')
-    assert em.inputs.in_file.endswith('space-ACPC_desc-preproc_T2w.nii.gz')
+    reg = wf.get_node('register_acpc')
+    assert reg.inputs.moving_image.endswith('space-ACPC_desc-preproc_T2w.nii.gz')
     # fixed remains the T1w that matches the surfaces' space
-    assert wf.get_node('extract_fixed').inputs.in_file.endswith('desc-preproc_T1w.nii.gz')
+    assert reg.inputs.fixed_image.endswith('desc-preproc_T1w.nii.gz')
 
 
 def test_map_scalar_to_surface_same_space_no_registration(tmp_path):

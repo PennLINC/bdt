@@ -438,61 +438,30 @@ def init_resample_surface_scalar_wf(node, name=None, context=None) -> pe.Workflo
     return wf
 
 
-def _apply_brain_mask(in_file, mask_file):
-    """Brain-extract a volume by multiplying it with a binary mask (for registration)."""
-    import os
+def _register_acpc_to_t1w(fixed_image, fixed_mask, moving_image, moving_mask):
+    """Rigid, brain-masked ANTsPy registration -> the ``from-ACPC_to-T1w`` transform.
 
-    import nibabel as nb
-    import numpy as np
-
-    img = nb.load(in_file)
-    mask = np.asanyarray(nb.load(mask_file).dataobj) > 0
-    data = np.asanyarray(img.dataobj) * mask
-    out = os.path.abspath('brain.nii.gz')
-    nb.Nifti1Image(data.astype('float32'), img.affine, img.header).to_filename(out)
-    return out
-
-
-def _first(inlist):
-    """Return the first element (to pluck a single transform off a list output)."""
-    return inlist[0]
-
-
-def _rigid_acpc_to_t1w_node():
-    """A rigid, mask-based ``antsRegistration`` node (fixed = T1w, moving = ACPC-T1w).
-
-    ``forward_transforms[0]`` is then the ``from-ACPC_to-T1w`` GenericAffine — the
-    file ``giftirs`` needs to warp a T1w surface into ACPC.  Brain-extracted inputs
-    are wired in by the caller (matches the empirically validated recipe).
+    ``fixed`` is the surfaces' T1w anatomical, ``moving`` the ``space-ACPC`` anatomical,
+    each restricted to its brain mask.  ANTsPy's forward transform (moving→fixed for
+    images) is, applied to *points*, the T1w→ACPC warp ``giftirs`` needs; it is an ITK
+    GenericAffine ``.mat`` — the same format the ``antsRegistration`` CLI wrote — copied
+    into the node's work dir so nipype tracks it.
     """
-    from nipype.interfaces.ants import Registration
+    import os
+    import shutil
 
-    return pe.Node(
-        Registration(
-            dimension=3,
-            float=False,
-            interpolation='Linear',
-            winsorize_lower_quantile=0.005,
-            winsorize_upper_quantile=0.995,
-            use_histogram_matching=False,
-            initial_moving_transform_com=1,
-            transforms=['Rigid'],
-            transform_parameters=[(0.1,)],
-            metric=['MI'],
-            metric_weight=[1.0],
-            radius_or_number_of_bins=[32],
-            sampling_strategy=['Regular'],
-            sampling_percentage=[0.25],
-            number_of_iterations=[[1000, 500, 250, 100]],
-            convergence_threshold=[1e-6],
-            convergence_window_size=[10],
-            shrink_factors=[[8, 4, 2, 1]],
-            smoothing_sigmas=[[3, 2, 1, 0]],
-            sigma_units=['vox'],
-        ),
-        name='register_acpc',
-        n_procs=4,
+    import ants
+
+    reg = ants.registration(
+        fixed=ants.image_read(fixed_image),
+        moving=ants.image_read(moving_image),
+        type_of_transform='Rigid',
+        mask=ants.image_read(fixed_mask),
+        moving_mask=ants.image_read(moving_mask),
     )
+    out = os.path.abspath('from-ACPC_to-T1w_xfm.mat')
+    shutil.copyfile(reg['fwdtransforms'][0], out)
+    return out
 
 
 @workflow_factory('map_scalar_to_surface')
@@ -509,11 +478,12 @@ def init_map_scalar_to_surface_wf(node, name=None, context=None) -> pe.Workflow:
     (the story case: QSIRecon NODDI in ``ACPC`` vs sMRIPrep surfaces in ``T1w``), the
     surface *vertices* are warped into the scalar's space before mapping.  Per the
     locked design decision, the T1w↔ACPC bridge is the one transform BDT *computes*:
-    a rigid, brain-masked ``antsRegistration`` (fixed = the surfaces' T1w anatomical,
-    moving = the ``space-ACPC`` anatomical) whose ``from-ACPC_to-T1w`` GenericAffine
-    is applied to each surface with ``giftirs transform`` (lossless, vertex-order
-    preserving).  QSIPrep's own stored ACPC↔anat transforms are deliberately *not*
-    used.  Any other cross-space pairing raises ``NotImplementedError``.
+    a rigid, brain-masked registration (**ANTsPy**, fixed = the surfaces' T1w
+    anatomical, moving = the ``space-ACPC`` anatomical) whose ``from-ACPC_to-T1w``
+    GenericAffine is applied to each surface with ``giftirs transform`` (lossless,
+    vertex-order preserving).  QSIPrep's own stored ACPC↔anat transforms are
+    deliberately *not* used.  Any other cross-space pairing raises
+    ``NotImplementedError``.
     """
     from niworkflows.interfaces.workbench import MetricDilate, VolumeToSurfaceMapping
 
@@ -567,38 +537,22 @@ def init_map_scalar_to_surface_wf(node, name=None, context=None) -> pe.Workflow:
             session=scalar_ses,
         )
 
-        extract_fixed = pe.Node(
+        # one ANTsPy node: rigid, brain-masked reg -> the from-ACPC_to-T1w .mat.
+        # (ANTsPy takes the masks natively, so no separate brain-extraction nodes.)
+        register = pe.Node(
             niu.Function(
-                function=_apply_brain_mask,
-                input_names=['in_file', 'mask_file'],
+                function=_register_acpc_to_t1w,
+                input_names=['fixed_image', 'fixed_mask', 'moving_image', 'moving_mask'],
                 output_names=['out'],
             ),
-            name='extract_fixed',
+            name='register_acpc',
+            n_procs=4,
         )
-        extract_fixed.inputs.in_file = fixed_img
-        extract_fixed.inputs.mask_file = fixed_mask
-        extract_moving = pe.Node(
-            niu.Function(
-                function=_apply_brain_mask,
-                input_names=['in_file', 'mask_file'],
-                output_names=['out'],
-            ),
-            name='extract_moving',
-        )
-        extract_moving.inputs.in_file = moving_img
-        extract_moving.inputs.mask_file = moving_mask
-
-        register = _rigid_acpc_to_t1w_node()  # fixed=T1w, moving=ACPC -> from-ACPC_to-T1w
-        pick_xfm = pe.Node(
-            niu.Function(function=_first, input_names=['inlist'], output_names=['out']),
-            name='pick_xfm',
-        )
-        wf.connect([
-            (extract_fixed, register, [('out', 'fixed_image')]),
-            (extract_moving, register, [('out', 'moving_image')]),
-            (register, pick_xfm, [('forward_transforms', 'inlist')]),
-        ])  # fmt:skip
-        xfm_source = (pick_xfm, 'out')
+        register.inputs.fixed_image = fixed_img
+        register.inputs.fixed_mask = fixed_mask
+        register.inputs.moving_image = moving_img
+        register.inputs.moving_mask = moving_mask
+        xfm_source = (register, 'out')
 
     for i, hemi in enumerate(('L', 'R'), start=1):
         picks = {}

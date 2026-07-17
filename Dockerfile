@@ -4,7 +4,8 @@
 # MIT License
 #
 
-ARG BASE_IMAGE=pennlinc/bdt-base:20260323
+# Rebuilt base (Workbench 2.0.x + Rust giftirs/trxrs; AFNI dropped, ANTs via ANTsPy).
+ARG BASE_IMAGE=pennlinc/bdt-base:20260717
 
 #
 # Build pixi environment
