@@ -98,9 +98,38 @@ class DictDataProvider:
         return path
 
 
+# pybids ``Query`` sentinels for presence-based filters. ``ANY`` is an alias of
+# ``REQUIRED``; we accept either the enum (``bids.layout.Query.ANY``) or its
+# serialized ``'Query.ANY'`` string (as written in spec YAML).
+_QUERY_NAMES = frozenset({'NONE', 'REQUIRED', 'ANY', 'OPTIONAL', 'ALL'})
+
+
+def _query_name(want) -> str | None:
+    """Return the ``Query`` sentinel name (e.g. ``'ANY'``) for a ``Query`` enum or a
+    ``'Query.<NAME>'`` string, else ``None`` for an ordinary filter value."""
+    if isinstance(want, str):
+        if want.startswith('Query.') and want[len('Query.') :] in _QUERY_NAMES:
+            return want[len('Query.') :]
+        return None
+    if type(want).__name__ == 'Query':
+        return getattr(want, 'name', None)
+    return None
+
+
 def _matches(entities: dict, query: dict) -> bool:
     for key, want in (query or {}).items():
         have = entities.get(key)
+        qname = _query_name(want)
+        if qname is not None:
+            present = key in entities and have is not None
+            if qname == 'NONE':
+                if present:
+                    return False
+            elif qname == 'OPTIONAL':
+                continue  # entity may or may not be present
+            elif not present:  # ANY / REQUIRED / ALL: entity must be present
+                return False
+            continue
         if isinstance(want, (list, tuple, set)):
             if have not in {str(w) for w in want} and have not in want:
                 return False

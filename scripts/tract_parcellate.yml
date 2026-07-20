@@ -18,6 +18,7 @@ nodes:
   action: tractogram_to_pseg
   inputs:
     tractograms: load_bundles
+    reference: load_fa  # an ACPC-space image defining the output voxel grid
   parameters:
     threshold: 0.0  # enables binarization to 4D dseg
   write_outputs: true  # also emit the binarized bundle masks
@@ -31,7 +32,7 @@ nodes:
     suffix: cbf
     extension: .nii.gz
 - name: cbf_roi
-  action: parcellate_scalar_as_roi
+  action: parcellate_scalar
   inputs:
     scalar: load_cbf
     atlas: bundle_rois  # warps ROI dseg -> CBF space
@@ -56,7 +57,7 @@ nodes:
     space: ACPC
     extension: .nii.gz
 - name: fa_roi
-  action: parcellate_scalar_as_roi
+  action: parcellate_scalar
   inputs:
     scalar: load_fa
     atlas: bundle_rois

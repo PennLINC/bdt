@@ -36,9 +36,20 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from bdt.engine.selection import Match, _matches
+from bdt.engine.selection import Match, _matches, _query_name
 
 _ENTITY_CONFIG = str(Path(__file__).resolve().parent.parent / 'data' / 'bdt_entities.json')
+
+
+def _as_query(value):
+    """Turn a serialized ``'Query.<NAME>'`` string into the pybids ``Query`` enum so
+    ``layout.get`` resolves presence filters; pass any other value through unchanged."""
+    name = _query_name(value)
+    if name is None or type(value).__name__ == 'Query':
+        return value
+    from bids.layout import Query
+
+    return getattr(Query, name)
 
 
 class BIDSDataProvider:
@@ -71,7 +82,9 @@ class BIDSDataProvider:
     ) -> list[Match]:
         layout = self._layout(dataset)
 
-        prefilter = filters.copy()
+        # pybids resolves ``Query`` presence sentinels natively, but only as the enum
+        # — a serialized ``'Query.ANY'`` string (from spec YAML) would match nothing.
+        prefilter = {k: _as_query(v) for k, v in filters.items()}
 
         # Only narrow by subject when the dataset is actually subject-indexed;
         # standard-space atlas datasets have no subjects and must ignore it.

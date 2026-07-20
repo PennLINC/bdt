@@ -196,3 +196,72 @@ def test_only_write_outputs_nodes_are_planned():
     plan = build_sink_plan(spec, resolved)
     assert 'parcellate_bold' not in plan
     assert 'fc_bold' in plan
+
+
+def _pseg_spec(threshold):
+    params = {} if threshold is None else {'threshold': threshold}
+    spec = parse_spec(
+        {
+            'nodes': [
+                {
+                    'name': 'load_bundles',
+                    'action': 'select_data',
+                    'dataset': 'qsirecon',
+                    'filters': {
+                        'suffix': 'streamlines',
+                        'extension': '.tck.gz',
+                        'space': 'ACPC',
+                    },
+                },
+                {
+                    'name': 'load_ref',
+                    'action': 'select_data',
+                    'dataset': 'qsirecon',
+                    'filters': {'suffix': 'dwimap', 'param': 'fa', 'space': 'ACPC'},
+                },
+                {
+                    'name': 'bundle_rois',
+                    'action': 'tractogram_to_pseg',
+                    'inputs': {'tractograms': 'load_bundles', 'reference': 'load_ref'},
+                    'parameters': params,
+                    'write_outputs': True,
+                },
+            ]
+        }
+    )
+    resolved = {
+        'load_bundles': Match(
+            path='/x/sub-01_bundle-CST_space-ACPC_streamlines.tck.gz',
+            entities={'sub': '01', 'space': 'ACPC', 'suffix': 'streamlines'},
+        ),
+        'load_ref': Match(
+            path='/x/sub-01_param-fa_space-ACPC_dwimap.nii.gz',
+            entities={'sub': '01', 'space': 'ACPC', 'param': 'fa', 'suffix': 'dwimap'},
+        ),
+    }
+    return spec, resolved
+
+
+def test_pseg_probseg_suffix_when_unthresholded():
+    spec, resolved = _pseg_spec(threshold=None)
+    plan = build_sink_plan(spec, resolved, {})
+    products = plan['bundle_rois']
+    primary = next(p for p in products if p.extension == '.nii.gz')
+    assert primary.suffix == 'probseg'
+
+
+def test_pseg_dseg_suffix_when_thresholded():
+    spec, resolved = _pseg_spec(threshold=0.0)
+    plan = build_sink_plan(spec, resolved, {})
+    products = plan['bundle_rois']
+    primary = next(p for p in products if p.extension == '.nii.gz')
+    assert primary.suffix == 'dseg'
+
+
+def test_pseg_emits_label_tsv_matching_primary_suffix():
+    spec, resolved = _pseg_spec(threshold=0.0)
+    plan = build_sink_plan(spec, resolved, {})
+    tsvs = [p for p in plan['bundle_rois'] if p.extension == '.tsv']
+    assert len(tsvs) == 1
+    assert tsvs[0].source_field == 'tsv'
+    assert tsvs[0].suffix == 'dseg'

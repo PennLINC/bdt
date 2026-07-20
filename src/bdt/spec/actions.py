@@ -124,6 +124,7 @@ class ExtraProduct:
     extension: str
     stat: str | None = None
     cifti_only: bool = True
+    match_primary_suffix: bool = False  # label TSVs follow the resolved primary suffix
 
 
 @dataclass(frozen=True)
@@ -169,6 +170,7 @@ class OutputSpec:
     preserve_source: bool = False
     emit_tsv: bool = True  # also flatten a CIFTI product to TSV (false for dense CIFTI)
     output_is_cifti: bool = False  # primary product is CIFTI regardless of input
+    dynamic_suffix: object = None  # optional Callable[[dict params], str] overriding suffix
 
     def __post_init__(self):
         if self.entities is None:
@@ -238,6 +240,7 @@ def _o(
     preserve_source=False,
     emit_tsv=True,
     output_is_cifti=False,
+    dynamic_suffix=None,
     **entities,
 ) -> OutputSpec:
     return OutputSpec(
@@ -252,6 +255,7 @@ def _o(
         preserve_source=preserve_source,
         emit_tsv=emit_tsv,
         output_is_cifti=output_is_cifti,
+        dynamic_suffix=dynamic_suffix,
     )
 
 
@@ -392,9 +396,37 @@ _ACTIONS: tuple[ActionSpec, ...] = (
         'tractogram_to_pseg',
         PROCESSING,
         'atlas',
-        roles=(_r('tractograms', 'streamlines', fan_out=False),),
+        roles=(
+            _r('tractograms', 'streamlines', fan_out=False),
+            # a single ACPC-space image defining the output voxel grid for tckmap
+            _r(
+                'reference',
+                'scalar',
+                'atlas',
+                'timeseries',
+                'subcortical_volume',
+                list_ok=False,
+            ),
+        ),
         parameters=frozenset({'threshold'}),
-        out=_o('dseg', '.nii.gz', 'dwi', primary_role='tractograms'),
+        out=_o(
+            'probseg',
+            '.nii.gz',
+            'dwi',
+            primary_role='tractograms',
+            dynamic_suffix=lambda params: (
+                'dseg' if params.get('threshold') is not None else 'probseg'
+            ),
+            extra=(
+                ExtraProduct(
+                    'tsv',
+                    'probseg',
+                    '.tsv',
+                    cifti_only=False,
+                    match_primary_suffix=True,
+                ),
+            ),
+        ),
     ),
     ActionSpec(
         'map_scalar_to_streamlines',
@@ -403,13 +435,6 @@ _ACTIONS: tuple[ActionSpec, ...] = (
         roles=(_r('scalar', 'scalar'), _r('streamlines', 'streamlines', fan_out=False)),
         parameters=frozenset({'name', 'per_vertex', 'per_streamline'}),
         out=_o('streamlines', '.trx', 'dwi', primary_role='streamlines'),
-    ),
-    ActionSpec(
-        'parcellate_scalar_as_roi',
-        PROCESSING,
-        'roi_means',
-        roles=(_r('scalar', 'scalar'), _r('atlas', 'atlas')),
-        out=_o('bundlemap', '.tsv', 'dwi', primary_role='scalar', stat='mean'),
     ),
     ActionSpec(
         'parcellate_scalar_as_tract_profile',

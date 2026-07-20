@@ -58,6 +58,9 @@ def datasets(tmp_path):
             'sub-01/dwi/sub-01_model-tensor_param-fa_space-ACPC_dwimap.nii.gz',
             'sub-01/dwi/sub-01_model-noddi_param-icvf_space-ACPC_dwimap.nii.gz',
             'sub-01/dwi/sub-01_model-noddi_param-od_space-ACPC_dwimap.nii.gz',
+            'sub-01/dwi/sub-01_model-gqi_bundle-CST_space-ACPC_streamlines.tck.gz',
+            'sub-01/dwi/sub-01_model-gqi_bundle-AF_space-ACPC_streamlines.tck.gz',
+            'sub-01/dwi/sub-01_model-gqi_space-ACPC_streamlines.tck.gz',
         ],
     )
     _make_dataset(
@@ -108,6 +111,25 @@ def test_exclude(datasets):
     matches = p.select('qsirecon', {'suffix': 'dwimap'}, [{'model': 'noddi'}], subject='01')
     models = sorted(m.entities['model'] for m in matches)
     assert models == ['tensor']
+
+
+def test_query_any_requires_entity_present(datasets):
+    p = BIDSDataProvider(datasets)
+    # 'Query.ANY' (the serialized spec-YAML form) selects every bundle-tagged file.
+    matches = p.select(
+        'qsirecon', {'suffix': 'streamlines', 'bundle': 'Query.ANY'}, subject='01'
+    )
+    assert sorted(m.entities['bundle'] for m in matches) == ['AF', 'CST']
+
+
+def test_query_none_requires_entity_absent(datasets):
+    p = BIDSDataProvider(datasets)
+    # 'Query.NONE' keeps only the streamlines file that carries no bundle entity.
+    matches = p.select(
+        'qsirecon', {'suffix': 'streamlines', 'bundle': 'Query.NONE'}, subject='01'
+    )
+    assert len(matches) == 1
+    assert 'bundle' not in matches[0].entities
 
 
 def test_relpath_and_subjects(datasets):

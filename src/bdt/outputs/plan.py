@@ -255,6 +255,10 @@ def build_sink_plan(
         # explicit fields, so pull them out of the mid-filename entity dict.
         tsv_suffix = node_ent.pop('suffix', out.suffix)
         datatype = node_ent.pop('datatype', out.datatype)
+        # Threshold-aware (or otherwise parameter-driven) primary suffix.
+        primary_suffix = tsv_suffix
+        if out.dynamic_suffix is not None:
+            primary_suffix = out.dynamic_suffix(node.parameters)
         mid = node_ent
         # For a preserved source, the native CIFTI keeps the same suffix as the TSV.
         cifti_suffix = tsv_suffix if out.preserve_source else out.cifti_suffix
@@ -291,11 +295,11 @@ def build_sink_plan(
                     )
                 )
         else:
-            # Volumetric / already-tabular: the primary (TSV) product only.
+            # Volumetric / already-tabular: the primary product only.
             products.append(
                 OutputProduct(
                     derive=PASSTHROUGH,
-                    suffix=tsv_suffix,
+                    suffix=primary_suffix,
                     extension=out.extension,
                     entities=dict(mid),
                     sidecar=dict(sidecar),
@@ -310,10 +314,11 @@ def build_sink_plan(
             ep_ent = dict(mid)
             if ep.stat is not None:
                 ep_ent['stat'] = ep.stat
+            ep_suffix = primary_suffix if ep.match_primary_suffix else ep.suffix
             products.append(
                 OutputProduct(
                     derive=PASSTHROUGH,
-                    suffix=ep.suffix,
+                    suffix=ep_suffix,
                     extension=ep.extension,
                     entities=ep_ent,
                     sidecar=dict(sidecar),

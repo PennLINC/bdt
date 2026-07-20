@@ -22,6 +22,6 @@
 #
 """Nipype interfaces for the BDT workflow."""
 
-from . import bids, reportlets
+from . import bids, reportlets, transforms
 
-__all__ = ['bids', 'reportlets']
+__all__ = ['bids', 'reportlets', 'transforms']

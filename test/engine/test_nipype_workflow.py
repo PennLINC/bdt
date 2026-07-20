@@ -483,3 +483,154 @@ def test_missing_factory_raises():
     )
     with pytest.raises(NotImplementedError, match='atlas_union'):
         init_bdt_wf(spec, {'a': '/x/a.dlabel.nii', 'b': '/x/b.dlabel.nii'})
+
+
+def _pseg_spec_wf(threshold=None):
+    params = {} if threshold is None else {'threshold': threshold}
+    return parse_spec(
+        {
+            'nodes': [
+                {
+                    'name': 'load_bundles',
+                    'action': 'select_data',
+                    'dataset': 'qsirecon',
+                    'filters': {
+                        'suffix': 'streamlines',
+                        'extension': '.tck.gz',
+                        'space': 'ACPC',
+                    },
+                },
+                {
+                    'name': 'load_ref',
+                    'action': 'select_data',
+                    'dataset': 'qsirecon',
+                    'filters': {
+                        'suffix': 'dwimap',
+                        'model': 'tensor',
+                        'param': 'fa',
+                        'space': 'ACPC',
+                    },
+                },
+                {
+                    'name': 'bundle_rois',
+                    'action': 'tractogram_to_pseg',
+                    'inputs': {'tractograms': 'load_bundles', 'reference': 'load_ref'},
+                    'parameters': params,
+                    'write_outputs': True,
+                },
+            ]
+        }
+    )
+
+
+def test_tractogram_to_pseg_probseg_no_threshold():
+    from bdt.engine.factories import init_tractogram_to_pseg_wf
+
+    spec = _pseg_spec_wf(threshold=None)
+    node = spec.by_name()['bundle_rois']
+    wf = init_tractogram_to_pseg_wf(node)
+
+    names = set(wf.list_node_names())
+    assert 'gunzip' in names
+    assert 'tck_to_tdi' in names
+    assert 'concatenate' in names
+    assert 'bundles_to_tsv' in names
+    assert 'binarize' not in names  # no threshold -> no binarize node
+    # the reference grid is a wired input, not a fixed value
+    assert 'reference' in wf.get_node('inputnode').inputs.copyable_trait_names()
+    # outputnode contract
+    out = wf.get_node('outputnode')
+    assert set(out.inputs.copyable_trait_names()) >= {'out', 'tsv'}
+
+
+def test_tractogram_to_pseg_dseg_with_threshold():
+    from bdt.engine.factories import init_tractogram_to_pseg_wf
+
+    spec = _pseg_spec_wf(threshold=0.0)
+    node = spec.by_name()['bundle_rois']
+    wf = init_tractogram_to_pseg_wf(node)
+
+    assert 'binarize' in set(wf.list_node_names())
+    assert wf.get_node('binarize').inputs.threshold == 0.0
+
+
+def test_tractogram_to_pseg_grouped_list_compiles():
+    """A multi-match bundle selection compiles into the factory as a grouped list."""
+    spec = _pseg_spec_wf(threshold=0.0)
+
+    # grouped selection -> the source node carries the full list of bundle paths
+    bundle_paths = [
+        f'/a/sub-01_bundle-{b}_space-ACPC_streamlines.tck.gz' for b in ('CST', 'AF', 'IFOF')
+    ]
+    selections = {
+        'load_bundles': bundle_paths,
+        'load_ref': '/a/sub-01_model-tensor_param-fa_space-ACPC_dwimap.nii.gz',
+    }
+
+    wf = init_bdt_wf(spec, selections)
+
+    # the grouped source node holds the list unchanged, and it feeds the factory inputnode
+    assert wf.get_node('load_bundles').inputs.out == bundle_paths
+    assert 'bundle_rois.gunzip' in set(wf.list_node_names())
+    assert 'bundle_rois.tck_to_tdi' in set(wf.list_node_names())
+    # the reference grid is wired from the reference selection node
+    assert wf.get_node('load_ref').inputs.out == selections['load_ref']
+
+
+def _profile_spec():
+    return parse_spec(
+        {
+            'nodes': [
+                {
+                    'name': 'load_bundles',
+                    'action': 'select_data',
+                    'dataset': 'qsirecon',
+                    'filters': {'suffix': 'streamlines', 'extension': '.tck.gz', 'space': 'ACPC'},
+                },
+                {
+                    'name': 'load_fa',
+                    'action': 'select_data',
+                    'dataset': 'qsirecon',
+                    'filters': {'suffix': 'dwimap', 'param': 'fa', 'space': 'ACPC'},
+                },
+                {
+                    'name': 'fa_profile',
+                    'action': 'parcellate_scalar_as_tract_profile',
+                    'inputs': {'scalar': 'load_fa', 'bundles': 'load_bundles'},
+                    'parameters': {'n_nodes': 50},
+                    'write_outputs': True,
+                },
+            ]
+        }
+    )
+
+
+def test_tract_profile_factory_wires_scalar_and_bundles():
+    from bdt.engine.factories import init_parcellate_scalar_as_tract_profile_wf
+
+    spec = _profile_spec()
+    node = spec.by_name()['fa_profile']
+    wf = init_parcellate_scalar_as_tract_profile_wf(node)
+
+    names = set(wf.list_node_names())
+    assert 'gunzip' in names
+    assert 'profile' in names
+    assert wf.get_node('profile').inputs.n_nodes == 50
+    inp = wf.get_node('inputnode').inputs.copyable_trait_names()
+    assert 'scalar' in inp and 'bundles' in inp
+
+
+def test_tract_profile_grouped_bundles_compiles():
+    spec = _profile_spec()
+    bundle_paths = [
+        f'/a/sub-01_bundle-{b}_space-ACPC_streamlines.tck.gz' for b in ('CST', 'AF')
+    ]
+    selections = {
+        'load_bundles': bundle_paths,
+        'load_fa': '/a/sub-01_param-fa_space-ACPC_dwimap.nii.gz',
+    }
+    wf = init_bdt_wf(spec, selections)
+
+    assert wf.get_node('load_bundles').inputs.out == bundle_paths
+    assert 'fa_profile.gunzip' in set(wf.list_node_names())
+    assert 'fa_profile.profile' in set(wf.list_node_names())

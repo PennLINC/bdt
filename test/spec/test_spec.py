@@ -250,8 +250,8 @@ STORY_3_4 = {
         },
         {
             'name': 'bundle_rois',
-            'action': 'tractogram_to_dseg',
-            'inputs': {'tractograms': 'load_bundles'},
+            'action': 'tractogram_to_pseg',
+            'inputs': {'tractograms': 'load_bundles', 'reference': 'load_fa'},
             'parameters': {'threshold': 0.0},
             'write_outputs': True,
         },
@@ -263,7 +263,7 @@ STORY_3_4 = {
         },
         {
             'name': 'cbf_roi',
-            'action': 'parcellate_scalar_as_roi',
+            'action': 'parcellate_scalar',
             'inputs': {'scalar': 'load_cbf', 'atlas': 'bundle_rois'},
             'write_outputs': True,
         },
@@ -282,7 +282,7 @@ STORY_3_4 = {
         },
         {
             'name': 'fa_roi',
-            'action': 'parcellate_scalar_as_roi',
+            'action': 'parcellate_scalar',
             'inputs': {'scalar': 'load_fa', 'atlas': 'bundle_rois'},
             'write_outputs': True,
         },
