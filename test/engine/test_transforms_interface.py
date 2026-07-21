@@ -120,10 +120,11 @@ def test_build_chain_inverts_reverse_affine(tmp_path):
 @pytest.mark.filterwarnings('ignore:Reference space not set')
 def test_build_chain_flattens_composite(monkeypatch):
     """A composite that loads as its own TransformChain is flattened in place."""
+    from nitransforms.manip import TransformChain
+
     import bdt.interfaces.transforms as ift
     from bdt.interfaces.transforms import _build_chain
     from bdt.transforms.queries import XfmStep
-    from nitransforms.manip import TransformChain
 
     # The .h5 step loads as a 2-transform composite (+2, then +3); the .mat step
     # loads as a single affine (+4). _build_chain must extend (not nest) the

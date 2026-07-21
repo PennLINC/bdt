@@ -319,8 +319,8 @@ def build_sink_plan(
             is_cifti_node = bool(cifti_by_node.get(node.name))
             if not is_cifti_node and ep.cifti_only and ep.volumetric_extension is None:
                 continue
-            ep_extension = ep.extension if is_cifti_node else (
-                ep.volumetric_extension or ep.extension
+            ep_extension = (
+                ep.extension if is_cifti_node else (ep.volumetric_extension or ep.extension)
             )
             ep_ent = dict(mid)
             if ep.stat is not None:

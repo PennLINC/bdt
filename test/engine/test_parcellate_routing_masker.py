@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import nibabel as nb
 import numpy as np
 import pytest
+
 from bdt.engine.factories import FactoryContext, init_parcellate_timeseries_wf
 from bdt.engine.selection import DictDataProvider, Match
 
@@ -39,12 +40,16 @@ def _context(atlas_path, mask_path, space='MNI152NLin6Asym', suffix='dseg'):
             {'space': space, 'suffix': suffix, 'extension': '.nii.gz'},
         ),
     }
-    provider = DictDataProvider({
-        'fmriprep': [
-            Match(mask_path, {'space': space, 'suffix': 'mask', 'desc': 'brain',
-                              'datatype': 'func'}),
-        ],
-    })
+    provider = DictDataProvider(
+        {
+            'fmriprep': [
+                Match(
+                    mask_path,
+                    {'space': space, 'suffix': 'mask', 'desc': 'brain', 'datatype': 'func'},
+                ),
+            ],
+        }
+    )
     return FactoryContext(
         resolved=resolved, provider=provider, subject='01', datasets=['fmriprep']
     )
@@ -129,30 +134,80 @@ def test_hand_rolled_parcellate_module_is_gone():
 # `reconstruction`, not `rec` -- and a fixture that invents the short forms will
 # pass while production fails, which is exactly how the first fix slipped through.
 _REST_MB = {
-    'subject': '125511', 'session': '1', 'task': 'rest', 'acquisition': 'multiband',
-    'space': 'MNI152NLin6Asym', 'suffix': 'bold', 'extension': '.nii.gz',
-    'datatype': 'func', 'desc': 'preproc', 'res': '2',
+    'subject': '125511',
+    'session': '1',
+    'task': 'rest',
+    'acquisition': 'multiband',
+    'space': 'MNI152NLin6Asym',
+    'suffix': 'bold',
+    'extension': '.nii.gz',
+    'datatype': 'func',
+    'desc': 'preproc',
+    'res': '2',
 }
 _MASKS = [
-    {'subject': '125511', 'session': '1', 'task': 'fracback', 'acquisition': 'singleband',
-     'space': 'MNI152NLin6Asym', 'suffix': 'mask', 'extension': '.nii.gz',
-     'datatype': 'func', 'desc': 'brain', 'res': '2'},
-    {'subject': '125511', 'session': '1', 'task': 'rest', 'acquisition': 'multiband',
-     'space': 'MNI152NLin6Asym', 'suffix': 'mask', 'extension': '.nii.gz',
-     'datatype': 'func', 'desc': 'brain', 'res': '2'},
-    {'subject': '125511', 'session': '1', 'task': 'rest', 'acquisition': 'singleband',
-     'space': 'MNI152NLin6Asym', 'suffix': 'mask', 'extension': '.nii.gz',
-     'datatype': 'func', 'desc': 'brain', 'res': '2'},
-    {'subject': '125511', 'session': '1', 'reconstruction': 'refaced',
-     'space': 'MNI152NLin6Asym', 'suffix': 'mask', 'extension': '.nii.gz',
-     'datatype': 'anat', 'desc': 'brain', 'res': '2'},
+    {
+        'subject': '125511',
+        'session': '1',
+        'task': 'fracback',
+        'acquisition': 'singleband',
+        'space': 'MNI152NLin6Asym',
+        'suffix': 'mask',
+        'extension': '.nii.gz',
+        'datatype': 'func',
+        'desc': 'brain',
+        'res': '2',
+    },
+    {
+        'subject': '125511',
+        'session': '1',
+        'task': 'rest',
+        'acquisition': 'multiband',
+        'space': 'MNI152NLin6Asym',
+        'suffix': 'mask',
+        'extension': '.nii.gz',
+        'datatype': 'func',
+        'desc': 'brain',
+        'res': '2',
+    },
+    {
+        'subject': '125511',
+        'session': '1',
+        'task': 'rest',
+        'acquisition': 'singleband',
+        'space': 'MNI152NLin6Asym',
+        'suffix': 'mask',
+        'extension': '.nii.gz',
+        'datatype': 'func',
+        'desc': 'brain',
+        'res': '2',
+    },
+    {
+        'subject': '125511',
+        'session': '1',
+        'reconstruction': 'refaced',
+        'space': 'MNI152NLin6Asym',
+        'suffix': 'mask',
+        'extension': '.nii.gz',
+        'datatype': 'anat',
+        'desc': 'brain',
+        'res': '2',
+    },
 ]
 
 
 def _bids_name(entities, suffix):
     order = ['subject', 'session', 'task', 'acquisition', 'reconstruction', 'space', 'res', 'desc']
-    keys = {'subject': 'sub', 'session': 'ses', 'task': 'task', 'acquisition': 'acq',
-            'reconstruction': 'rec', 'space': 'space', 'res': 'res', 'desc': 'desc'}
+    keys = {
+        'subject': 'sub',
+        'session': 'ses',
+        'task': 'task',
+        'acquisition': 'acq',
+        'reconstruction': 'rec',
+        'space': 'space',
+        'res': 'res',
+        'desc': 'desc',
+    }
     parts = [f'{keys[k]}-{entities[k]}' for k in order if k in entities]
     return '_'.join(parts) + f'_{suffix}.nii.gz'
 
@@ -177,15 +232,22 @@ def _bold_node_and_context(tmp_path, provider, bold_entities=None):
         desc=None,
     )
     ctx = FactoryContext(
-        provider=provider, subject='125511', datasets=['fmriprep'],
+        provider=provider,
+        subject='125511',
+        datasets=['fmriprep'],
         resolved={
             'load_bold': Match(
                 '/d/' + _bids_name(bold_entities or _REST_MB, 'bold'),
                 bold_entities or _REST_MB,
             ),
-            'atlas_sel': Match(_atlas(tmp_path, 3), {
-                'space': 'MNI152NLin6Asym', 'suffix': 'dseg', 'extension': '.nii.gz',
-            }),
+            'atlas_sel': Match(
+                _atlas(tmp_path, 3),
+                {
+                    'space': 'MNI152NLin6Asym',
+                    'suffix': 'dseg',
+                    'extension': '.nii.gz',
+                },
+            ),
         },
     )
     return node, ctx
@@ -247,14 +309,36 @@ def test_anatomical_lookup_prefers_t1w_over_t2w(tmp_path):
     t2 = tmp_path / 'sub-125511_ses-1_rec-defaced_desc-preproc_T2w.nii.gz'
     for p in (t1, t2):
         nb.Nifti1Image(np.zeros((2, 2, 2), 'float32'), np.eye(4)).to_filename(p)
-    provider = DictDataProvider({'aslprep': [
-        Match(str(t1), {'subject': '125511', 'session': '1', 'reconstruction': 'refaced',
-                        'desc': 'preproc', 'suffix': 'T1w', 'datatype': 'anat',
-                        'extension': '.nii.gz'}),
-        Match(str(t2), {'subject': '125511', 'session': '1', 'reconstruction': 'defaced',
-                        'desc': 'preproc', 'suffix': 'T2w', 'datatype': 'anat',
-                        'extension': '.nii.gz'}),
-    ]})
+    provider = DictDataProvider(
+        {
+            'aslprep': [
+                Match(
+                    str(t1),
+                    {
+                        'subject': '125511',
+                        'session': '1',
+                        'reconstruction': 'refaced',
+                        'desc': 'preproc',
+                        'suffix': 'T1w',
+                        'datatype': 'anat',
+                        'extension': '.nii.gz',
+                    },
+                ),
+                Match(
+                    str(t2),
+                    {
+                        'subject': '125511',
+                        'session': '1',
+                        'reconstruction': 'defaced',
+                        'desc': 'preproc',
+                        'suffix': 'T2w',
+                        'datatype': 'anat',
+                        'extension': '.nii.gz',
+                    },
+                ),
+            ]
+        }
+    )
     ctx = FactoryContext(provider=provider, subject='125511', datasets=['aslprep'])
     assert _find_anatomical(ctx, None, None) == str(t1)
 
@@ -265,10 +349,23 @@ def test_anatomical_lookup_falls_back_to_t2w(tmp_path):
 
     t2 = tmp_path / 'sub-01_space-ACPC_desc-preproc_T2w.nii.gz'
     nb.Nifti1Image(np.zeros((2, 2, 2), 'float32'), np.eye(4)).to_filename(t2)
-    provider = DictDataProvider({'qsiprep': [
-        Match(str(t2), {'subject': '01', 'space': 'ACPC', 'desc': 'preproc',
-                        'suffix': 'T2w', 'datatype': 'anat', 'extension': '.nii.gz'}),
-    ]})
+    provider = DictDataProvider(
+        {
+            'qsiprep': [
+                Match(
+                    str(t2),
+                    {
+                        'subject': '01',
+                        'space': 'ACPC',
+                        'desc': 'preproc',
+                        'suffix': 'T2w',
+                        'datatype': 'anat',
+                        'extension': '.nii.gz',
+                    },
+                ),
+            ]
+        }
+    )
     ctx = FactoryContext(provider=provider, subject='01', datasets=['qsiprep'])
     assert _find_anatomical(ctx, 'ACPC', None) == str(t2)
 
@@ -281,10 +378,21 @@ def test_ambiguous_same_suffix_anatomicals_raise(tmp_path):
     for rec in ('refaced', 'defaced'):
         p = tmp_path / f'sub-01_rec-{rec}_desc-preproc_T1w.nii.gz'
         nb.Nifti1Image(np.zeros((2, 2, 2), 'float32'), np.eye(4)).to_filename(p)
-        paths.append(Match(str(p), {'subject': '01', 'reconstruction': rec,
-                                    'desc': 'preproc', 'suffix': 'T1w',
-                                    'datatype': 'anat', 'extension': '.nii.gz'}))
-    ctx = FactoryContext(provider=DictDataProvider({'aslprep': paths}),
-                         subject='01', datasets=['aslprep'])
+        paths.append(
+            Match(
+                str(p),
+                {
+                    'subject': '01',
+                    'reconstruction': rec,
+                    'desc': 'preproc',
+                    'suffix': 'T1w',
+                    'datatype': 'anat',
+                    'extension': '.nii.gz',
+                },
+            )
+        )
+    ctx = FactoryContext(
+        provider=DictDataProvider({'aslprep': paths}), subject='01', datasets=['aslprep']
+    )
     with pytest.raises(ValueError, match='matched 2 files'):
         _find_anatomical(ctx, None, None)

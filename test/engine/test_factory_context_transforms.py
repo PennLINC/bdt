@@ -5,6 +5,7 @@
 from types import SimpleNamespace
 
 import pytest
+
 from bdt.engine.factories import FactoryContext
 
 
@@ -71,13 +72,15 @@ def test_role_space_falls_back_to_template_entity():
 
 
 def test_discover_transforms_excludes_acpc_endpoints_and_sorts():
-    provider = _StubProvider({
-        'aslprep': [_StubMatch('/d/sub-01_from-T1w_to-MNI152NLin6Asym_mode-image_xfm.h5')],
-        'qsiprep': [
-            _StubMatch('/d/sub-01_from-ACPC_to-T1w_mode-image_xfm.mat'),   # excluded (ACPC)
-            _StubMatch('/d/sub-01_from-T1w_to-ACPC_mode-image_xfm.mat'),   # excluded (ACPC)
-        ],
-    })
+    provider = _StubProvider(
+        {
+            'aslprep': [_StubMatch('/d/sub-01_from-T1w_to-MNI152NLin6Asym_mode-image_xfm.h5')],
+            'qsiprep': [
+                _StubMatch('/d/sub-01_from-ACPC_to-T1w_mode-image_xfm.mat'),  # excluded (ACPC)
+                _StubMatch('/d/sub-01_from-T1w_to-ACPC_mode-image_xfm.mat'),  # excluded (ACPC)
+            ],
+        }
+    )
     ctx = FactoryContext(provider=provider, subject='01', datasets=['aslprep', 'qsiprep'])
     got = ctx.discover_transforms()
     assert got == ['/d/sub-01_from-T1w_to-MNI152NLin6Asym_mode-image_xfm.h5']
@@ -88,10 +91,12 @@ def test_discover_transforms_no_provider_returns_empty():
 
 
 def test_role_is_cifti_falls_back_to_resolved_path_without_spec():
-    ctx = FactoryContext(resolved={
-        'load_alff': _StubMatch('alff.dscalar.nii', {'extension': '.dscalar.nii'}),
-        'load_cbf': _StubMatch('cbf.nii.gz', {'extension': '.nii.gz'}),
-    })
+    ctx = FactoryContext(
+        resolved={
+            'load_alff': _StubMatch('alff.dscalar.nii', {'extension': '.dscalar.nii'}),
+            'load_cbf': _StubMatch('cbf.nii.gz', {'extension': '.nii.gz'}),
+        }
+    )
     dense = _node({'scalar': ['load_alff']})
     vol = _node({'scalar': ['load_cbf']})
     assert ctx.role_is_cifti(dense, 'scalar') is True
@@ -158,9 +163,7 @@ def test_role_atlas_labels_none_for_processing_atlas():
 
 
 def test_role_datatype_reads_resolved_entities():
-    ctx = FactoryContext(
-        resolved={'load_bold': _StubMatch('bold.nii.gz', {'datatype': 'func'})}
-    )
+    ctx = FactoryContext(resolved={'load_bold': _StubMatch('bold.nii.gz', {'datatype': 'func'})})
     node = _node({'timeseries': ['load_bold']})
     assert ctx.role_datatype(node, 'timeseries') == 'func'
     assert ctx.role_datatype(node, 'atlas') is None

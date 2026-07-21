@@ -40,9 +40,7 @@ def _match(path, entities):
 
 
 def _node(name, role_to_upstreams, parameters=None):
-    return SimpleNamespace(
-        name=name, inputs=role_to_upstreams, parameters=parameters or {}
-    )
+    return SimpleNamespace(name=name, inputs=role_to_upstreams, parameters=parameters or {})
 
 
 def test_cifti_scalar_routes_to_cifti_wf():
@@ -62,10 +60,16 @@ def test_volumetric_same_space_has_no_warp_node(tmp_path):
 
     node = _node('fa_roi', {'scalar': ['load_fa'], 'atlas': ['bundle_rois']})
     ctx = FactoryContext(
-        provider=DictDataProvider({
-            'anat': [_match(_mask(tmp_path, 'ACPC'), {'suffix': 'mask', 'desc': 'brain',
-                                                        'space': 'ACPC'})],
-        }),
+        provider=DictDataProvider(
+            {
+                'anat': [
+                    _match(
+                        _mask(tmp_path, 'ACPC'),
+                        {'suffix': 'mask', 'desc': 'brain', 'space': 'ACPC'},
+                    )
+                ],
+            }
+        ),
         subject='01',
         datasets=['anat'],
         resolved={
@@ -88,12 +92,16 @@ def test_volumetric_cross_space_non_acpc_builds_warp_without_bridge(tmp_path):
 
     node = _node('roi', {'scalar': ['load_cbf'], 'atlas': ['load_atlas']})
     ctx = FactoryContext(
-        provider=DictDataProvider({
-            'aslprep': [_match(
-                _mask(tmp_path, 'MNI152NLin2009cAsym'),
-                {'suffix': 'mask', 'desc': 'brain', 'space': 'MNI152NLin2009cAsym'},
-            )],
-        }),
+        provider=DictDataProvider(
+            {
+                'aslprep': [
+                    _match(
+                        _mask(tmp_path, 'MNI152NLin2009cAsym'),
+                        {'suffix': 'mask', 'desc': 'brain', 'space': 'MNI152NLin2009cAsym'},
+                    )
+                ],
+            }
+        ),
         subject='01',
         datasets=['aslprep'],
         resolved={
@@ -122,34 +130,64 @@ def test_volumetric_cross_space_acpc_bridge_scopes_native_t1w_by_session(tmp_pat
         (tmp_path / rel).touch()
         return str(tmp_path / rel)
 
-    provider = DictDataProvider({
-        'smriprep': [
-            Match(touch('sub-01_ses-1_desc-preproc_T1w.nii.gz'),
-                  {'suffix': 'T1w', 'desc': 'preproc', 'datatype': 'anat', 'session': '1'}),
-            Match(touch('sub-01_ses-2_desc-preproc_T1w.nii.gz'),
-                  {'suffix': 'T1w', 'desc': 'preproc', 'datatype': 'anat', 'session': '2'}),
-            Match(touch('sub-01_ses-1_desc-brain_mask.nii.gz'),
-                  {'suffix': 'mask', 'desc': 'brain', 'datatype': 'anat', 'session': '1'}),
-            Match(touch('sub-01_ses-2_desc-brain_mask.nii.gz'),
-                  {'suffix': 'mask', 'desc': 'brain', 'datatype': 'anat', 'session': '2'}),
-        ],
-        'qsiprep': [
-            Match(touch('sub-01_ses-1_space-ACPC_desc-preproc_T1w.nii.gz'),
-                  {'suffix': 'T1w', 'desc': 'preproc', 'space': 'ACPC',
-                   'datatype': 'anat', 'session': '1'}),
-            Match(touch('sub-01_ses-1_space-ACPC_desc-brain_mask.nii.gz'),
-                  {'suffix': 'mask', 'desc': 'brain', 'space': 'ACPC',
-                   'datatype': 'anat', 'session': '1'}),
-            Match(touch('sub-01_from-ACPC_to-T1w_mode-image_xfm.mat'),
-                  {'suffix': 'xfm', 'from': 'ACPC', 'to': 'T1w'}),  # excluded by discovery
-        ],
-        'aslprep': [
-            Match(touch('sub-01_from-T1w_to-MNI152NLin6Asym_mode-image_xfm.h5'),
-                  {'suffix': 'xfm', 'from': 'T1w', 'to': 'MNI152NLin6Asym'}),
-            Match(_mask(tmp_path, 'MNI152NLin6Asym'),
-                  {'suffix': 'mask', 'desc': 'brain', 'space': 'MNI152NLin6Asym'}),
-        ],
-    })
+    provider = DictDataProvider(
+        {
+            'smriprep': [
+                Match(
+                    touch('sub-01_ses-1_desc-preproc_T1w.nii.gz'),
+                    {'suffix': 'T1w', 'desc': 'preproc', 'datatype': 'anat', 'session': '1'},
+                ),
+                Match(
+                    touch('sub-01_ses-2_desc-preproc_T1w.nii.gz'),
+                    {'suffix': 'T1w', 'desc': 'preproc', 'datatype': 'anat', 'session': '2'},
+                ),
+                Match(
+                    touch('sub-01_ses-1_desc-brain_mask.nii.gz'),
+                    {'suffix': 'mask', 'desc': 'brain', 'datatype': 'anat', 'session': '1'},
+                ),
+                Match(
+                    touch('sub-01_ses-2_desc-brain_mask.nii.gz'),
+                    {'suffix': 'mask', 'desc': 'brain', 'datatype': 'anat', 'session': '2'},
+                ),
+            ],
+            'qsiprep': [
+                Match(
+                    touch('sub-01_ses-1_space-ACPC_desc-preproc_T1w.nii.gz'),
+                    {
+                        'suffix': 'T1w',
+                        'desc': 'preproc',
+                        'space': 'ACPC',
+                        'datatype': 'anat',
+                        'session': '1',
+                    },
+                ),
+                Match(
+                    touch('sub-01_ses-1_space-ACPC_desc-brain_mask.nii.gz'),
+                    {
+                        'suffix': 'mask',
+                        'desc': 'brain',
+                        'space': 'ACPC',
+                        'datatype': 'anat',
+                        'session': '1',
+                    },
+                ),
+                Match(
+                    touch('sub-01_from-ACPC_to-T1w_mode-image_xfm.mat'),
+                    {'suffix': 'xfm', 'from': 'ACPC', 'to': 'T1w'},
+                ),  # excluded by discovery
+            ],
+            'aslprep': [
+                Match(
+                    touch('sub-01_from-T1w_to-MNI152NLin6Asym_mode-image_xfm.h5'),
+                    {'suffix': 'xfm', 'from': 'T1w', 'to': 'MNI152NLin6Asym'},
+                ),
+                Match(
+                    _mask(tmp_path, 'MNI152NLin6Asym'),
+                    {'suffix': 'mask', 'desc': 'brain', 'space': 'MNI152NLin6Asym'},
+                ),
+            ],
+        }
+    )
     node = _node('cbf_roi', {'scalar': ['load_cbf'], 'atlas': ['bundle_rois']})
     ctx = FactoryContext(
         provider=provider,
@@ -192,40 +230,62 @@ def test_cross_space_warp_inserted_for_processing_node_atlas(tmp_path):
     spec = load_spec('scripts/tract_parcellate.yml')
     cbf_roi = spec.by_name()['cbf_roi']
 
-    provider = DictDataProvider({
-        'anat': [
-            Match(touch('sub-01_desc-preproc_T1w.nii.gz'),
-                  {'suffix': 'T1w', 'desc': 'preproc', 'datatype': 'anat'}),
-            Match(touch('sub-01_desc-brain_mask.nii.gz'),
-                  {'suffix': 'mask', 'desc': 'brain', 'datatype': 'anat'}),
-        ],
-        'qsiprep': [
-            Match(touch('sub-01_space-ACPC_desc-preproc_T1w.nii.gz'),
-                  {'suffix': 'T1w', 'desc': 'preproc', 'space': 'ACPC', 'datatype': 'anat'}),
-            Match(touch('sub-01_space-ACPC_desc-brain_mask.nii.gz'),
-                  {'suffix': 'mask', 'desc': 'brain', 'space': 'ACPC', 'datatype': 'anat'}),
-            Match(touch('sub-01_from-ACPC_to-T1w_mode-image_xfm.mat'),
-                  {'suffix': 'xfm', 'from': 'ACPC', 'to': 'T1w'}),  # excluded by discovery
-        ],
-        'aslprep': [
-            Match(touch('sub-01_from-T1w_to-MNI152NLin6Asym_mode-image_xfm.h5'),
-                  {'suffix': 'xfm', 'from': 'T1w', 'to': 'MNI152NLin6Asym'}),
-            Match(touch('sub-01_space-MNI152NLin6Asym_desc-brain_mask.nii.gz'),
-                  {'suffix': 'mask', 'desc': 'brain', 'space': 'MNI152NLin6Asym'}),
-        ],
-    })
+    provider = DictDataProvider(
+        {
+            'anat': [
+                Match(
+                    touch('sub-01_desc-preproc_T1w.nii.gz'),
+                    {'suffix': 'T1w', 'desc': 'preproc', 'datatype': 'anat'},
+                ),
+                Match(
+                    touch('sub-01_desc-brain_mask.nii.gz'),
+                    {'suffix': 'mask', 'desc': 'brain', 'datatype': 'anat'},
+                ),
+            ],
+            'qsiprep': [
+                Match(
+                    touch('sub-01_space-ACPC_desc-preproc_T1w.nii.gz'),
+                    {'suffix': 'T1w', 'desc': 'preproc', 'space': 'ACPC', 'datatype': 'anat'},
+                ),
+                Match(
+                    touch('sub-01_space-ACPC_desc-brain_mask.nii.gz'),
+                    {'suffix': 'mask', 'desc': 'brain', 'space': 'ACPC', 'datatype': 'anat'},
+                ),
+                Match(
+                    touch('sub-01_from-ACPC_to-T1w_mode-image_xfm.mat'),
+                    {'suffix': 'xfm', 'from': 'ACPC', 'to': 'T1w'},
+                ),  # excluded by discovery
+            ],
+            'aslprep': [
+                Match(
+                    touch('sub-01_from-T1w_to-MNI152NLin6Asym_mode-image_xfm.h5'),
+                    {'suffix': 'xfm', 'from': 'T1w', 'to': 'MNI152NLin6Asym'},
+                ),
+                Match(
+                    touch('sub-01_space-MNI152NLin6Asym_desc-brain_mask.nii.gz'),
+                    {'suffix': 'mask', 'desc': 'brain', 'space': 'MNI152NLin6Asym'},
+                ),
+            ],
+        }
+    )
     # resolved holds SELECTIONS ONLY -- bundle_rois (processing) is deliberately absent.
     resolved = {
-        'load_bundles': Match('/q/bundles.tck.gz',
-                              {'space': 'ACPC', 'suffix': 'streamlines', 'extension': '.tck.gz'}),
-        'load_fa': Match('/q/fa.nii.gz',
-                         {'space': 'ACPC', 'suffix': 'dwimap', 'extension': '.nii.gz'}),
-        'load_cbf': Match('/a/cbf.nii.gz',
-                          {'space': 'MNI152NLin6Asym', 'suffix': 'cbf', 'extension': '.nii.gz'}),
+        'load_bundles': Match(
+            '/q/bundles.tck.gz', {'space': 'ACPC', 'suffix': 'streamlines', 'extension': '.tck.gz'}
+        ),
+        'load_fa': Match(
+            '/q/fa.nii.gz', {'space': 'ACPC', 'suffix': 'dwimap', 'extension': '.nii.gz'}
+        ),
+        'load_cbf': Match(
+            '/a/cbf.nii.gz', {'space': 'MNI152NLin6Asym', 'suffix': 'cbf', 'extension': '.nii.gz'}
+        ),
     }
     ctx = FactoryContext(
-        provider=provider, subject='01', spec=spec,
-        datasets=['anat', 'qsiprep', 'aslprep'], resolved=resolved,
+        provider=provider,
+        subject='01',
+        spec=spec,
+        datasets=['anat', 'qsiprep', 'aslprep'],
+        resolved=resolved,
     )
 
     # the fix: the processing-node atlas's inherited space now resolves.

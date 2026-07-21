@@ -30,6 +30,7 @@ pytest.importorskip('nilearn')
 import nibabel as nb  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
+
 from bdt.utils.cifti import (  # noqa: E402
     cifti_to_tsv,
     is_cifti,

@@ -173,8 +173,13 @@ def test_parcellate_scalar_preserves_source_naming():
         'load_alff': Match(
             path='/x/sub-01_stat-alff_boldmap.dscalar.nii',
             entities={
-                'subject': '01', 'space': 'fsLR', 'den': '91k', 'statistic': 'alff',
-                'suffix': 'boldmap', 'datatype': 'func', 'extension': '.dscalar.nii',
+                'subject': '01',
+                'space': 'fsLR',
+                'den': '91k',
+                'statistic': 'alff',
+                'suffix': 'boldmap',
+                'datatype': 'func',
+                'extension': '.dscalar.nii',
             },
         ),
         'atlas': Match(path='/a/atlas.dlabel.nii', entities={'atlas': '4S1056Parcels'}),

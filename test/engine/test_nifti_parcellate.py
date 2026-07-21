@@ -9,6 +9,7 @@ pytest.importorskip('nilearn')
 import nibabel as nb  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
+
 from bdt.interfaces.connectivity import NiftiParcellate  # noqa: E402
 
 
@@ -39,9 +40,7 @@ def _fixture(tmp_path):
     return tmp_path
 
 
-@pytest.mark.filterwarnings(
-    'ignore:Non-finite values detected\\. :UserWarning'
-)
+@pytest.mark.filterwarnings('ignore:Non-finite values detected\\. :UserWarning')
 def test_coverage_is_mask_over_atlas(tmp_path, monkeypatch):
     """Coverage is |parcel n mask| / |parcel|, computed from the atlas alone.
 
@@ -69,9 +68,7 @@ def test_coverage_is_mask_over_atlas(tmp_path, monkeypatch):
     assert coverage['B'] == pytest.approx(0.25)
 
 
-@pytest.mark.filterwarnings(
-    'ignore:Non-finite values detected\\. :UserWarning'
-)
+@pytest.mark.filterwarnings('ignore:Non-finite values detected\\. :UserWarning')
 def test_parcels_below_min_coverage_are_nan(tmp_path, monkeypatch):
     """Parcel B (0.25 coverage) is NaN-masked at min_coverage=0.5; A (0.75) is kept.
 

@@ -2,13 +2,13 @@
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 """Tests for TemplateFlow edge enumeration and fetch (bdt.transforms.templateflow)."""
 
+from bdt.transforms.graph import build_transform_graph
+from bdt.transforms.queries import chain_for_image_resample
 from bdt.transforms.templateflow import (
     parse_tf_xfm,
     templateflow_edges,
     templateflow_fetch,
 )
-from bdt.transforms.graph import build_transform_graph
-from bdt.transforms.queries import chain_for_image_resample
 
 
 def test_parse_tf_xfm_target_is_tpl_entity():
@@ -31,12 +31,14 @@ def test_parse_tf_xfm_ignores_non_tf_and_points():
 
 
 def test_templateflow_edges_injected_and_feeds_graph():
-    templates_fn = lambda: ['MNI152NLin6Asym']
-    ls_fn = lambda tpl, suffix, extension: (
-        ['tpl-MNI152NLin6Asym_from-MNI152NLin2009cAsym_mode-image_xfm.h5']
-        if extension == '.h5'
-        else []
-    )
+    def templates_fn():
+        return ['MNI152NLin6Asym']
+
+    def ls_fn(tpl, suffix, extension):
+        if extension != '.h5':
+            return []
+        return ['tpl-MNI152NLin6Asym_from-MNI152NLin2009cAsym_mode-image_xfm.h5']
+
     edges = templateflow_edges(templates_fn=templates_fn, ls_fn=ls_fn)
     assert [(e.frm, e.to) for e in edges] == [('MNI152NLin2009cAsym', 'MNI152NLin6Asym')]
 

@@ -554,9 +554,7 @@ def _warp_atlas_field(wf, node, context, inputnode, data_role):
 
     atlas_space = context.role_space(node, 'atlas')
     data_space = context.role_space(node, data_role)
-    cross_space = (
-        atlas_space is not None and data_space is not None and atlas_space != data_space
-    )
+    cross_space = atlas_space is not None and data_space is not None and atlas_space != data_space
     if not cross_space:
         return (inputnode, 'atlas')
 
@@ -677,7 +675,7 @@ def _discover_brain_mask(context, node, data_role: str) -> str:
 
     session = context.role_session(node, data_role)
     attempts = []
-    for filters in ([scoped, base] if scoped != base else [base]):
+    for filters in [scoped, base] if scoped != base else [base]:
         hits = context.find_references(filters, session=session)
         if len(hits) == 1:
             return hits[0]
@@ -712,9 +710,7 @@ def _init_parcellate_volumetric_wf(node, name, context, data_role: str) -> pe.Wo
         # processing-node atlas: labels arrive over the secondary edge (workflow.py)
         fields.append('atlas_labels')
     inputnode = pe.Node(niu.IdentityInterface(fields=fields), name='inputnode')
-    outputnode = pe.Node(
-        niu.IdentityInterface(fields=['out', 'coverage']), name='outputnode'
-    )
+    outputnode = pe.Node(niu.IdentityInterface(fields=['out', 'coverage']), name='outputnode')
 
     ndim = context.role_atlas_ndim(node, 'atlas')
     mask = _discover_brain_mask(context, node, data_role)
@@ -1164,9 +1160,7 @@ def init_tractogram_to_pseg_wf(node, name=None, context=None) -> pe.Workflow:
 
     if threshold is not None:
         binarize = pe.Node(
-            ThresholdNifti(
-                threshold=float(threshold), binarize=True, out_file='dseg.nii.gz'
-            ),
+            ThresholdNifti(threshold=float(threshold), binarize=True, out_file='dseg.nii.gz'),
             name='binarize',
         )
         wf.connect([
@@ -1215,9 +1209,7 @@ def init_parcellate_scalar_as_tract_profile_wf(node, name=None, context=None) ->
     )
 
     wf = pe.Workflow(name=name or node.name)
-    inputnode = pe.Node(
-        niu.IdentityInterface(fields=['scalar', 'bundles']), name='inputnode'
-    )
+    inputnode = pe.Node(niu.IdentityInterface(fields=['scalar', 'bundles']), name='inputnode')
     outputnode = pe.Node(niu.IdentityInterface(fields=['out']), name='outputnode')
 
     gunzip = pe.MapNode(Gunzip(), iterfield=['in_file'], name='gunzip')

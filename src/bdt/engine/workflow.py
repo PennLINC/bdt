@@ -142,9 +142,7 @@ def init_bdt_wf(
             # action's graph is byte-identical.
             if up_kind == 'processing' and 'tsv' in _identity_fields(up_obj, 'outputnode'):
                 if f'{role}_labels' in _identity_fields(downstream, 'inputnode'):
-                    wf.connect(
-                        up_obj, 'outputnode.tsv', downstream, f'inputnode.{role}_labels'
-                    )
+                    wf.connect(up_obj, 'outputnode.tsv', downstream, f'inputnode.{role}_labels')
 
     if sink_plan and base_directory is not None:
         _attach_sinks(wf, built, sink_plan, base_directory)

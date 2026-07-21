@@ -115,7 +115,7 @@ def templateflow_fetch(path: str | Path, get_fn=None) -> str:
         from templateflow import api
 
         get_fn = api.get
-    extension = p.name[p.name.rindex('_xfm') + len('_xfm'):]  # '.h5' / '.nii.gz'
+    extension = p.name[p.name.rindex('_xfm') + len('_xfm') :]  # '.h5' / '.nii.gz'
     query = {'from': xfm.frm}
     if xfm.mode is not None:
         query['mode'] = xfm.mode  # disambiguate image vs points at the same extension

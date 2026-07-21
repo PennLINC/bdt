@@ -6,10 +6,11 @@ import pytest
 
 pytest.importorskip('nipype')
 
-from bdt.engine.workflow import _identity_fields, init_bdt_wf  # noqa: E402
-from bdt.spec import parse_spec  # noqa: E402
 from nipype.interfaces import utility as niu  # noqa: E402
 from nipype.pipeline import engine as pe  # noqa: E402
+
+from bdt.engine.workflow import _identity_fields, init_bdt_wf  # noqa: E402
+from bdt.spec import parse_spec  # noqa: E402
 
 
 def _wf(inputs=None, outputs=None):
@@ -54,16 +55,18 @@ def _stub_factory(in_fields, out_fields):
 
     def factory(node, name=None, context=None):
         wf = pe.Workflow(name=name or node.name)
-        wf.add_nodes([
-            pe.Node(niu.IdentityInterface(fields=list(in_fields)), name='inputnode'),
-            pe.Node(niu.IdentityInterface(fields=list(out_fields)), name='outputnode'),
-        ])
+        wf.add_nodes(
+            [
+                pe.Node(niu.IdentityInterface(fields=list(in_fields)), name='inputnode'),
+                pe.Node(niu.IdentityInterface(fields=list(out_fields)), name='outputnode'),
+            ]
+        )
         return wf
 
     return factory
 
 
-@pytest.fixture()
+@pytest.fixture
 def register_factory(monkeypatch):
     """Register a stub factory under a scratch action name for one test only.
 
@@ -74,9 +77,7 @@ def register_factory(monkeypatch):
     from bdt.engine.factories import WORKFLOW_FACTORIES
 
     def _register(action_name, in_fields, out_fields):
-        monkeypatch.setitem(
-            WORKFLOW_FACTORIES, action_name, _stub_factory(in_fields, out_fields)
-        )
+        monkeypatch.setitem(WORKFLOW_FACTORIES, action_name, _stub_factory(in_fields, out_fields))
 
     return _register
 
@@ -87,13 +88,15 @@ def _edges(wf):
 
 
 def _spec_with_producer_consumer(producer_action, consumer_action):
-    return parse_spec({
-        'nodes': [
-            {'name': 'src', 'action': 'select_data', 'dataset': 'stub', 'filters': {}},
-            {'name': 'producer', 'action': producer_action, 'inputs': {'in_': 'src'}},
-            {'name': 'consumer', 'action': consumer_action, 'inputs': {'data': 'producer'}},
-        ]
-    })
+    return parse_spec(
+        {
+            'nodes': [
+                {'name': 'src', 'action': 'select_data', 'dataset': 'stub', 'filters': {}},
+                {'name': 'producer', 'action': producer_action, 'inputs': {'in_': 'src'}},
+                {'name': 'consumer', 'action': consumer_action, 'inputs': {'data': 'producer'}},
+            ]
+        }
+    )
 
 
 def test_labels_edge_wired_when_both_sides_opt_in(register_factory):
@@ -149,12 +152,14 @@ def test_selection_upstream_feeding_labels_consumer_does_not_raise(register_fact
     reorder going unnoticed.
     """
     register_factory('stub_consume_labels3', ['data', 'data_labels'], ['out'])
-    spec = parse_spec({
-        'nodes': [
-            {'name': 'src', 'action': 'select_data', 'dataset': 'stub', 'filters': {}},
-            {'name': 'consumer', 'action': 'stub_consume_labels3', 'inputs': {'data': 'src'}},
-        ]
-    })
+    spec = parse_spec(
+        {
+            'nodes': [
+                {'name': 'src', 'action': 'select_data', 'dataset': 'stub', 'filters': {}},
+                {'name': 'consumer', 'action': 'stub_consume_labels3', 'inputs': {'data': 'src'}},
+            ]
+        }
+    )
 
     wf = init_bdt_wf(spec, {'src': '/x/f.ext'})  # must not raise AttributeError
 

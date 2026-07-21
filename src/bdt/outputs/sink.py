@@ -143,9 +143,7 @@ class DerivativeSink:
             prefix = '_'.join(prefix_parts)
             folder = f'sub-{sub}' + (f'/ses-{ses}' if ses else '')
             # subject/session are in the leading token; drop from mid-entities
-            entities = {
-                k: v for k, v in entities.items() if k not in ('subject', 'session')
-            }
+            entities = {k: v for k, v in entities.items() if k not in ('subject', 'session')}
         name = bids_name(prefix, entities, suffix, extension)
         return f'{folder}/{datatype}/{name}'
 

@@ -146,7 +146,7 @@ class _SampleTractProfilesInputSpec(BaseInterfaceInputSpec):
         File(exists=True), mandatory=True, desc='per-bundle .tck tractograms (bundle space)'
     )
     scalar = File(
-        exists=True, mandatory=True, desc='scalar volume to sample, in the bundles\' space'
+        exists=True, mandatory=True, desc="scalar volume to sample, in the bundles' space"
     )
     n_nodes = traits.Int(100, usedefault=True, desc='number of along-tract nodes')
     entity = traits.Str('bundle', usedefault=True, desc='BIDS entity key naming each bundle')
@@ -215,9 +215,7 @@ class SampleTractProfiles(SimpleInterface):
             for i, sl in enumerate(streamlines):
                 pts = _orient_like(_resample_streamline(np.asarray(sl), n_nodes), reference)
                 vox = nb.affines.apply_affine(inv_affine, pts)
-                samples[i] = map_coordinates(
-                    data, vox.T, order=1, mode='constant', cval=np.nan
-                )
+                samples[i] = map_coordinates(data, vox.T, order=1, mode='constant', cval=np.nan)
 
             mean = np.nanmean(samples, axis=0)
             std = np.nanstd(samples, axis=0)

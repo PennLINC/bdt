@@ -116,18 +116,14 @@ def test_exclude(datasets):
 def test_query_any_requires_entity_present(datasets):
     p = BIDSDataProvider(datasets)
     # 'Query.ANY' (the serialized spec-YAML form) selects every bundle-tagged file.
-    matches = p.select(
-        'qsirecon', {'suffix': 'streamlines', 'bundle': 'Query.ANY'}, subject='01'
-    )
+    matches = p.select('qsirecon', {'suffix': 'streamlines', 'bundle': 'Query.ANY'}, subject='01')
     assert sorted(m.entities['bundle'] for m in matches) == ['AF', 'CST']
 
 
 def test_query_none_requires_entity_absent(datasets):
     p = BIDSDataProvider(datasets)
     # 'Query.NONE' keeps only the streamlines file that carries no bundle entity.
-    matches = p.select(
-        'qsirecon', {'suffix': 'streamlines', 'bundle': 'Query.NONE'}, subject='01'
-    )
+    matches = p.select('qsirecon', {'suffix': 'streamlines', 'bundle': 'Query.NONE'}, subject='01')
     assert len(matches) == 1
     assert 'bundle' not in matches[0].entities
 

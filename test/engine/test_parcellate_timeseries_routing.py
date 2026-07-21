@@ -55,12 +55,16 @@ def test_volumetric_timeseries_same_space_builds_parcellate_no_warp(tmp_path):
 
     node = _node('parc', {'timeseries': ['load_bold'], 'atlas': ['load_atlas']})
     ctx = FactoryContext(
-        provider=DictDataProvider({
-            'fmriprep': [_match(
-                _mask(tmp_path, 'MNI152NLin6Asym'),
-                {'suffix': 'mask', 'desc': 'brain', 'space': 'MNI152NLin6Asym'},
-            )],
-        }),
+        provider=DictDataProvider(
+            {
+                'fmriprep': [
+                    _match(
+                        _mask(tmp_path, 'MNI152NLin6Asym'),
+                        {'suffix': 'mask', 'desc': 'brain', 'space': 'MNI152NLin6Asym'},
+                    )
+                ],
+            }
+        ),
         subject='01',
         datasets=['fmriprep'],
         resolved={
@@ -81,13 +85,18 @@ def test_volumetric_timeseries_cross_space_builds_warp(tmp_path):
 
     node = _node('parc', {'timeseries': ['load_bold'], 'atlas': ['load_atlas']})
     ctx = FactoryContext(
-        provider=DictDataProvider({
-            'atlases': [_match(
-                _mask(tmp_path, 'MNI152NLin6Asym'),
-                {'suffix': 'mask', 'desc': 'brain', 'space': 'MNI152NLin6Asym'},
-            )],
-        }),
-        subject='01', datasets=['atlases'],
+        provider=DictDataProvider(
+            {
+                'atlases': [
+                    _match(
+                        _mask(tmp_path, 'MNI152NLin6Asym'),
+                        {'suffix': 'mask', 'desc': 'brain', 'space': 'MNI152NLin6Asym'},
+                    )
+                ],
+            }
+        ),
+        subject='01',
+        datasets=['atlases'],
         resolved={
             'load_bold': _match('bold.nii.gz', {'space': 'MNI152NLin6Asym'}),
             'load_atlas': _match(
@@ -147,13 +156,17 @@ def test_nifti_parcellate_yml_compiles_end_to_end(tmp_path):
         ),
     }
     # no local xfms and no ACPC anatomicals needed for a standard->standard warp
-    provider = DictDataProvider({
-        'fmriprep': [_match(
-            _mask(tmp_path, 'MNI152NLin6Asym'),
-            {'suffix': 'mask', 'desc': 'brain', 'space': 'MNI152NLin6Asym'},
-        )],
-        'atlases': [],
-    })
+    provider = DictDataProvider(
+        {
+            'fmriprep': [
+                _match(
+                    _mask(tmp_path, 'MNI152NLin6Asym'),
+                    {'suffix': 'mask', 'desc': 'brain', 'space': 'MNI152NLin6Asym'},
+                )
+            ],
+            'atlases': [],
+        }
+    )
     context = FactoryContext(
         spec=spec,
         resolved=resolved,
@@ -179,9 +192,7 @@ def test_nifti_parcellate_yml_compiles_end_to_end(tmp_path):
     # proves the CIFTI path was skipped. Assert the interface type instead.
     from bdt.interfaces.connectivity import NiftiParcellate, TSVConnect
 
-    correlate_node = wf.get_node(
-        next(n for n in names if n.endswith('fc_bold.correlate'))
-    )
+    correlate_node = wf.get_node(next(n for n in names if n.endswith('fc_bold.correlate')))
     assert isinstance(correlate_node.interface, TSVConnect), correlate_node.interface
     # the 3D dseg atlas must route through the XCP-D masker port, not the deleted
     # hand-rolled parcellator.

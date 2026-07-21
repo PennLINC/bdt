@@ -55,9 +55,7 @@ class _ProbSegParcellateInputSpec(BaseInterfaceInputSpec):
     atlas = File(
         exists=True, mandatory=True, desc='4D atlas: one volume per region (pseg or dseg)'
     )
-    atlas_labels = File(
-        exists=True, mandatory=True, desc='BIDS dseg.tsv with index/name columns'
-    )
+    atlas_labels = File(exists=True, mandatory=True, desc='BIDS dseg.tsv with index/name columns')
     mask = File(exists=True, mandatory=True, desc='brain mask on the data grid')
     binarize = traits.Bool(
         False,
@@ -101,8 +99,7 @@ class ProbSegParcellate(SimpleInterface):
         atlas_img = nb.load(self.inputs.atlas)
         if atlas_img.ndim != 4:
             raise ValueError(
-                f'ProbSegParcellate expects a 4D atlas, got {atlas_img.ndim}D: '
-                f'{self.inputs.atlas}'
+                f'ProbSegParcellate expects a 4D atlas, got {atlas_img.ndim}D: {self.inputs.atlas}'
             )
         n_parcels = atlas_img.shape[3]
 
@@ -154,8 +151,8 @@ class ProbSegParcellate(SimpleInterface):
         )
 
         self._results['coverage'] = os.path.join(runtime.cwd, 'coverage.tsv')
-        pd.DataFrame(
-            coverage.astype(np.float32), index=names, columns=['coverage']
-        ).to_csv(self._results['coverage'], sep='\t', na_rep='n/a', index_label='Node')
+        pd.DataFrame(coverage.astype(np.float32), index=names, columns=['coverage']).to_csv(
+            self._results['coverage'], sep='\t', na_rep='n/a', index_label='Node'
+        )
 
         return runtime

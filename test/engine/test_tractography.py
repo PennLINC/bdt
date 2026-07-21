@@ -113,6 +113,7 @@ def _touch(tmp_path, name):
 
 def test_entities_to_seg_tsv_orders_by_input(tmp_path):
     import pandas as pd
+
     from bdt.interfaces.tractography import EntitiesToSegTSV
 
     files = [
@@ -149,6 +150,7 @@ def _tck(tmp_path, name, streamlines):
 
 def test_sample_tract_profiles_follows_scalar_gradient(tmp_path):
     import pandas as pd
+
     from bdt.interfaces.tractography import SampleTractProfiles
 
     # scalar volume where value == x voxel index; identity affine => world == voxel
@@ -175,6 +177,7 @@ def test_sample_tract_profiles_follows_scalar_gradient(tmp_path):
 
 def test_sample_tract_profiles_multiple_bundles_and_missing_entity(tmp_path):
     import pandas as pd
+
     from bdt.interfaces.tractography import SampleTractProfiles
 
     ramp = np.broadcast_to(np.arange(10, dtype=np.float32)[:, None, None], (10, 10, 10))
@@ -201,6 +204,7 @@ def test_sample_tract_profiles_accepts_trailing_singleton_volume(tmp_path):
     the equivalent 3D image exactly.
     """
     import pandas as pd
+
     from bdt.interfaces.tractography import SampleTractProfiles
 
     ramp = np.broadcast_to(np.arange(10, dtype=np.float32)[:, None, None], (10, 10, 10))
@@ -235,6 +239,7 @@ def test_sample_tract_profiles_rejects_multi_volume_scalar(tmp_path):
 def test_sample_tract_profiles_keeps_singleton_spatial_axis(tmp_path):
     """A singleton *spatial* axis must survive -- a blanket squeeze would break it."""
     import pandas as pd
+
     from bdt.interfaces.tractography import SampleTractProfiles
 
     flat = np.zeros((10, 1, 10), dtype=np.float32)
@@ -247,6 +252,7 @@ def test_sample_tract_profiles_keeps_singleton_spatial_axis(tmp_path):
         SampleTractProfiles(in_files=[tck], scalar=scalar, n_nodes=8).run().outputs.out_file
     )
     assert np.all(np.diff(df['mean'].to_numpy()) > 0)
+
 
 def _profile_node(name='cbf_profile'):
     from types import SimpleNamespace
@@ -263,7 +269,9 @@ def _profile_context(scalar_space, bundles_space, tmp_path=None, provider=None):
     from bdt.engine.selection import Match
 
     return FactoryContext(
-        provider=provider, subject='01', datasets=['aslprep', 'qsiprep'],
+        provider=provider,
+        subject='01',
+        datasets=['aslprep', 'qsiprep'],
         resolved={
             'load_cbf': Match('cbf.nii.gz', {'space': scalar_space, 'suffix': 'cbf'}),
             'load_bundles': Match('b.tck.gz', {'space': bundles_space, 'suffix': 'streamlines'}),
@@ -280,20 +288,30 @@ def _anat_provider(tmp_path):
         nb.Nifti1Image(np.zeros((2, 2, 2), 'float32'), np.eye(4)).to_filename(path)
         return Match(str(path), entities)
 
-    return DictDataProvider({
-        'aslprep': [
-            _w('sub-01_desc-preproc_T1w.nii.gz',
-               {'desc': 'preproc', 'suffix': 'T1w', 'datatype': 'anat'}),
-            _w('sub-01_desc-brain_mask.nii.gz',
-               {'desc': 'brain', 'suffix': 'mask', 'datatype': 'anat'}),
-        ],
-        'qsiprep': [
-            _w('sub-01_space-ACPC_desc-preproc_T1w.nii.gz',
-               {'space': 'ACPC', 'desc': 'preproc', 'suffix': 'T1w', 'datatype': 'anat'}),
-            _w('sub-01_space-ACPC_desc-brain_mask.nii.gz',
-               {'space': 'ACPC', 'desc': 'brain', 'suffix': 'mask', 'datatype': 'anat'}),
-        ],
-    })
+    return DictDataProvider(
+        {
+            'aslprep': [
+                _w(
+                    'sub-01_desc-preproc_T1w.nii.gz',
+                    {'desc': 'preproc', 'suffix': 'T1w', 'datatype': 'anat'},
+                ),
+                _w(
+                    'sub-01_desc-brain_mask.nii.gz',
+                    {'desc': 'brain', 'suffix': 'mask', 'datatype': 'anat'},
+                ),
+            ],
+            'qsiprep': [
+                _w(
+                    'sub-01_space-ACPC_desc-preproc_T1w.nii.gz',
+                    {'space': 'ACPC', 'desc': 'preproc', 'suffix': 'T1w', 'datatype': 'anat'},
+                ),
+                _w(
+                    'sub-01_space-ACPC_desc-brain_mask.nii.gz',
+                    {'space': 'ACPC', 'desc': 'brain', 'suffix': 'mask', 'datatype': 'anat'},
+                ),
+            ],
+        }
+    )
 
 
 def test_tract_profile_same_space_samples_directly(tmp_path):
@@ -343,10 +361,7 @@ def test_tract_profile_warp_feeds_the_sampler_not_the_raw_scalar(tmp_path):
         _profile_node(),
         context=_profile_context('MNI152NLin6Asym', 'ACPC', provider=_anat_provider(tmp_path)),
     )
-    sources = {
-        (u.name, d.name): data['connect']
-        for u, d, data in wf._graph.edges(data=True)
-    }
+    sources = {(u.name, d.name): data['connect'] for u, d, data in wf._graph.edges(data=True)}
     assert ('warp_scalar', 'profile') in sources
     assert [('out_file', 'scalar')] == sources[('warp_scalar', 'profile')]
     assert ('inputnode', 'profile') not in sources

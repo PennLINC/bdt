@@ -9,6 +9,7 @@ pytest.importorskip('nilearn')
 import nibabel as nb  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
+
 from bdt.interfaces.probseg import ProbSegParcellate  # noqa: E402
 
 

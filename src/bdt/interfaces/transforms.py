@@ -105,15 +105,21 @@ class _ResolveApplyInputSpec(BaseInterfaceInputSpec):
     moving = File(exists=True, mandatory=True, desc='image to warp')
     reference = File(exists=True, mandatory=True, desc='image defining the output grid')
     local_transforms = traits.List(
-        File(exists=True), value=[], usedefault=True,
+        File(exists=True),
+        value=[],
+        usedefault=True,
         desc='discovered BIDS xfm files from the input derivatives',
     )
     bridges = traits.List(
-        File(exists=True), value=[], usedefault=True,
+        File(exists=True),
+        value=[],
+        usedefault=True,
         desc='computed transform files (e.g. the ACPC<->T1w bridge)',
     )
     interpolation = traits.Enum(
-        'linear', 'nearest', usedefault=True,
+        'linear',
+        'nearest',
+        usedefault=True,
         desc="resampling interpolation ('nearest' for label/dseg images)",
     )
     out_file = traits.Str('resampled.nii.gz', usedefault=True, desc='output filename')
@@ -138,13 +144,12 @@ class ResolveApplyTransforms(SimpleInterface):
     output_spec = _ResolveApplyOutputSpec
 
     def _run_interface(self, runtime):
+        from nipype import logging
         from nitransforms.linear import Affine
         from nitransforms.resampling import apply
 
         from bdt.transforms.graph import build_transform_graph, parse_xfm_filename
         from bdt.transforms.queries import chain_for_image_resample
-
-        from nipype import logging
 
         iflogger = logging.getLogger('nipype.interface')
 
@@ -175,16 +180,24 @@ class ResolveApplyTransforms(SimpleInterface):
             # resolved chain, then restack onto the (3D) reference grid.
             warped = [
                 apply(
-                    transform, vol, reference=self.inputs.reference,
-                    order=order, mode='constant', cval=0.0,
+                    transform,
+                    vol,
+                    reference=self.inputs.reference,
+                    order=order,
+                    mode='constant',
+                    cval=0.0,
                 )
                 for vol in four_to_three(moving_img)
             ]
             resampled = concat_images(warped)
         else:
             resampled = apply(
-                transform, self.inputs.moving, reference=self.inputs.reference,
-                order=order, mode='constant', cval=0.0,
+                transform,
+                self.inputs.moving,
+                reference=self.inputs.reference,
+                order=order,
+                mode='constant',
+                cval=0.0,
             )
         resampled.to_filename(out_file)
 

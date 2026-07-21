@@ -284,8 +284,12 @@ _ACTIONS: tuple[ActionSpec, ...] = (
             cifti_extension='.ptseries.nii',
             extra=(
                 ExtraProduct(
-                    'coverage', 'boldmap', '.pscalar.nii',
-                    volumetric_extension='.tsv', cifti_only=False, stat='coverage',
+                    'coverage',
+                    'boldmap',
+                    '.pscalar.nii',
+                    volumetric_extension='.tsv',
+                    cifti_only=False,
+                    stat='coverage',
                 ),
             ),
             statistic='mean',
@@ -311,8 +315,12 @@ _ACTIONS: tuple[ActionSpec, ...] = (
             preserve_source=True,
             extra=(
                 ExtraProduct(
-                    'coverage', 'map', '.pscalar.nii',
-                    volumetric_extension='.tsv', cifti_only=False, stat='coverage',
+                    'coverage',
+                    'map',
+                    '.pscalar.nii',
+                    volumetric_extension='.tsv',
+                    cifti_only=False,
+                    stat='coverage',
                 ),
             ),
         ),

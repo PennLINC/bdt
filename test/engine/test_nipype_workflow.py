@@ -617,14 +617,13 @@ def test_tract_profile_factory_wires_scalar_and_bundles():
     assert 'profile' in names
     assert wf.get_node('profile').inputs.n_nodes == 50
     inp = wf.get_node('inputnode').inputs.copyable_trait_names()
-    assert 'scalar' in inp and 'bundles' in inp
+    assert 'scalar' in inp
+    assert 'bundles' in inp
 
 
 def test_tract_profile_grouped_bundles_compiles():
     spec = _profile_spec()
-    bundle_paths = [
-        f'/a/sub-01_bundle-{b}_space-ACPC_streamlines.tck.gz' for b in ('CST', 'AF')
-    ]
+    bundle_paths = [f'/a/sub-01_bundle-{b}_space-ACPC_streamlines.tck.gz' for b in ('CST', 'AF')]
     selections = {
         'load_bundles': bundle_paths,
         'load_fa': '/a/sub-01_param-fa_space-ACPC_dwimap.nii.gz',
