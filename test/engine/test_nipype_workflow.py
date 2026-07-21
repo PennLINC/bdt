@@ -113,7 +113,7 @@ def test_sink_nodes_attached_from_plan(tmp_path):
         'load_bold': Match(
             path='/data/sub-01_bold.dtseries.nii',
             entities={
-                'sub': '01',
+                'subject': '01',
                 'space': 'fsLR',
                 'den': '91k',
                 'suffix': 'bold',
@@ -425,11 +425,11 @@ def test_reference_detection_subject_vs_session_level():
         [
             Match(
                 '/a/sub-01_ses-1_desc-preproc_T1w.nii.gz',
-                {'sub': '01', 'ses': '1', 'suffix': 'T1w', 'desc': 'preproc'},
+                {'subject': '01', 'session': '1', 'suffix': 'T1w', 'desc': 'preproc'},
             ),
             Match(
                 '/a/sub-01_ses-2_desc-preproc_T1w.nii.gz',
-                {'sub': '01', 'ses': '2', 'suffix': 'T1w', 'desc': 'preproc'},
+                {'subject': '01', 'session': '2', 'suffix': 'T1w', 'desc': 'preproc'},
             ),
         ]
     )
@@ -441,7 +441,7 @@ def test_reference_detection_subject_vs_session_level():
         [
             Match(
                 '/a/sub-01_desc-preproc_T1w.nii.gz',
-                {'sub': '01', 'suffix': 'T1w', 'desc': 'preproc'},
+                {'subject': '01', 'suffix': 'T1w', 'desc': 'preproc'},
             )
         ]
     )
@@ -452,7 +452,7 @@ def test_reference_detection_subject_vs_session_level():
         [
             Match(
                 '/a/sub-01_ses-2_desc-preproc_T1w.nii.gz',
-                {'sub': '01', 'ses': '2', 'suffix': 'T1w', 'desc': 'preproc'},
+                {'subject': '01', 'session': '2', 'suffix': 'T1w', 'desc': 'preproc'},
             )
         ]
     )

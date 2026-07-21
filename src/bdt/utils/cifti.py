@@ -23,10 +23,13 @@
 """Pure-Python CIFTI / NIfTI tabular helpers.
 
 The numeric bits that are *not* a Connectome-Workbench call: reading a
-parcellated CIFTI into a TSV, parcellating a NIfTI with nilearn, and correlating
-a parcel-timeseries TSV.  Dependency-light (nibabel / nilearn / pandas) and
-unit-testable with small synthetic inputs.  The nipype action factories wrap
-these in ``Function`` nodes / ``SimpleInterface``\\ s.
+parcellated CIFTI into a TSV, and parcellating a NIfTI with nilearn.
+Dependency-light (nibabel / nilearn / pandas) and unit-testable with small
+synthetic inputs.  The nipype action factories wrap these in ``Function`` nodes
+/ ``SimpleInterface``\\ s.
+
+Correlating a parcel-timeseries TSV lives in XCP-D's vendored
+:class:`~bdt.interfaces.connectivity.TSVConnect`, not here.
 """
 
 from __future__ import annotations
@@ -90,14 +93,4 @@ def nifti_parcellate_to_tsv(
     timeseries = masker.fit_transform(str(data_path))  # (n_rows, n_regions)
     columns = [str(label) for label in masker.labels_]
     pd.DataFrame(timeseries, columns=columns).to_csv(out_path, sep='\t', index=False)
-    return str(out_path)
-
-
-def tsv_correlation(tsv_path: str | Path, out_path: str | Path) -> str:
-    """Pearson correlation matrix of a parcel-timeseries TSV -> a relmat TSV."""
-    import pandas as pd
-
-    df = pd.read_csv(tsv_path, sep='\t')
-    corr = df.corr(method='pearson')
-    corr.to_csv(out_path, sep='\t', index=False)
     return str(out_path)

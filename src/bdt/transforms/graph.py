@@ -48,8 +48,14 @@ import networkx as nx
 # ``from-X_to-Y[_mode-image]_xfm.ext``.  ``mode`` is optional; spaces are BIDS
 # alphanumeric labels.  Extensions cover ITK composite (.h5), affine (.mat/.txt),
 # and displacement-field warps (.nii/.nii.gz).
+# ``(?:^|_)`` rather than a bare ``_``: a transform BDT generates itself has no
+# subject prefix, so its name *starts* with ``from-`` (e.g.
+# ``from-ACPC_to-T1w_mode-image_xfm.mat``).  Requiring the leading underscore made
+# every such file unparseable, and unparseable bridges are dropped -- which silently
+# removed ACPC from the transform graph entirely.  pybids' own ``from`` entity
+# pattern is anchored the same way.
 _XFM_RE = re.compile(
-    r'_from-(?P<frm>[A-Za-z0-9]+)_to-(?P<to>[A-Za-z0-9]+)'
+    r'(?:^|_)from-(?P<frm>[A-Za-z0-9]+)_to-(?P<to>[A-Za-z0-9]+)'
     r'(?:_mode-(?P<mode>[A-Za-z0-9]+))?'
     r'_xfm\.(?P<ext>h5|mat|txt|nii\.gz|nii)$'
 )

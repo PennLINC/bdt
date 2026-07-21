@@ -69,7 +69,7 @@ def _two_task_provider():
                 Match(
                     '/x/sub-01_task-rest_bold.dtseries.nii',
                     {
-                        'sub': '01',
+                        'subject': '01',
                         'task': 'rest',
                         'suffix': 'bold',
                         'extension': '.dtseries.nii',
@@ -80,7 +80,7 @@ def _two_task_provider():
                 Match(
                     '/x/sub-01_task-nback_bold.dtseries.nii',
                     {
-                        'sub': '01',
+                        'subject': '01',
                         'task': 'nback',
                         'suffix': 'bold',
                         'extension': '.dtseries.nii',
@@ -232,7 +232,7 @@ def test_collision_detected_before_run(tmp_path):
         'extension': '.tsv',
         'datatype': 'func',
         'scope': 'participant',
-        'entities': {'sub': '01', 'atlas': 'A'},
+        'entities': {'subject': '01', 'atlas': 'A'},
     }
     plan = {'a': [OutputProduct(**same)], 'b': [OutputProduct(**same)]}
     with pytest.raises(ValueError, match='collision'):
@@ -273,7 +273,7 @@ def test_story_3_1_end_to_end_matches_xcpd(tmp_path):
     spec = parse_spec(STORY_3_1)
     # narrow to one run for a fast, single-combination check
     spec.by_name()['load_bold'].filters.update(
-        {'space': 'fsLR', 'desc': 'denoised', 'task': 'rest', 'acq': 'singleband'}
+        {'space': 'fsLR', 'desc': 'denoised', 'task': 'rest', 'acquisition': 'singleband'}
     )
     spec.by_name()['atlas_4s'].filters['extension'] = '.dlabel.nii'
     spec.by_name()['parcellate_bold'].parameters['min_coverage'] = 0.5
@@ -336,11 +336,11 @@ def test_parcellate_scalar_matches_xcpd_alff(tmp_path):
                     'dataset': 'xcpd',
                     'filters': {
                         'suffix': 'boldmap',
-                        'stat': 'alff',
+                        'statistic': 'alff',
                         'space': 'fsLR',
                         'den': '91k',
                         'task': 'rest',
-                        'acq': 'singleband',
+                        'acquisition': 'singleband',
                         'extension': '.dscalar.nii',
                     },
                     'exclude': [{'desc': 'smooth'}],

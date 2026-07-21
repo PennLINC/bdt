@@ -31,6 +31,9 @@ nodes:
     space: MNI152NLin6Asym
     suffix: cbf
     extension: .nii.gz
+    # ASLPrep also writes desc-basil / basilGM / basilWM / score / scrub and two
+    # timeseries variants; desc-NONE pins the plain mean CBF map.
+    desc: Query.NONE
 - name: cbf_roi
   action: parcellate_scalar
   inputs:

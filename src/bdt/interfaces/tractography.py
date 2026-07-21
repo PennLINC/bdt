@@ -179,6 +179,21 @@ class SampleTractProfiles(SimpleInterface):
 
         img = nb.load(self.inputs.scalar)
         data = np.asarray(img.dataobj, dtype=np.float32)
+        if data.ndim > 3:
+            # ASLPrep writes its CBF maps as (x, y, z, 1) -- a single volume that is
+            # nonetheless 4D.  scipy's map_coordinates matches the coordinate array's
+            # first axis to the data's ndim, so a 4D array with 3D coordinates fails
+            # with 'invalid shape for coordinate array'.  Drop trailing singleton axes
+            # only; squeezing wholesale would also collapse a singleton *spatial* axis.
+            trailing = data.shape[3:]
+            if int(np.prod(trailing)) != 1:
+                raise ValueError(
+                    f'{self.inputs.scalar} has shape {data.shape}: a tract profile needs '
+                    'a single 3D volume, but this holds '
+                    f'{int(np.prod(trailing))} volumes. Select one volume (e.g. narrow '
+                    "the spec's filters to the mean map rather than a timeseries)."
+                )
+            data = data.reshape(data.shape[:3])
         inv_affine = np.linalg.inv(img.affine)
         n_nodes = self.inputs.n_nodes
         key = self.inputs.entity

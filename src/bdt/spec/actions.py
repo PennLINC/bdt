@@ -124,6 +124,7 @@ class ExtraProduct:
     extension: str
     stat: str | None = None
     cifti_only: bool = True
+    volumetric_extension: str | None = None  # extension for a volumetric (non-CIFTI) node
     match_primary_suffix: bool = False  # label TSVs follow the resolved primary suffix
 
 
@@ -281,8 +282,13 @@ _ACTIONS: tuple[ActionSpec, ...] = (
             primary_role='timeseries',
             cifti_suffix='timeseries',
             cifti_extension='.ptseries.nii',
-            extra=(ExtraProduct('coverage', 'boldmap', '.pscalar.nii', stat='coverage'),),
-            stat='mean',
+            extra=(
+                ExtraProduct(
+                    'coverage', 'boldmap', '.pscalar.nii',
+                    volumetric_extension='.tsv', cifti_only=False, stat='coverage',
+                ),
+            ),
+            statistic='mean',
         ),
     ),
     ActionSpec(
@@ -303,6 +309,12 @@ _ACTIONS: tuple[ActionSpec, ...] = (
             primary_role='scalar',
             cifti_extension='.pscalar.nii',
             preserve_source=True,
+            extra=(
+                ExtraProduct(
+                    'coverage', 'map', '.pscalar.nii',
+                    volumetric_extension='.tsv', cifti_only=False, stat='coverage',
+                ),
+            ),
         ),
     ),
     ActionSpec(
@@ -319,7 +331,7 @@ _ACTIONS: tuple[ActionSpec, ...] = (
             primary_role='timeseries',
             cifti_suffix='boldmap',
             cifti_extension='.pconn.nii',
-            stat='pearsoncorrelation',
+            statistic='pearsoncorrelation',
         ),
     ),
     # -- surface mapping + depth profiles (Strategy B / wb_command) --------

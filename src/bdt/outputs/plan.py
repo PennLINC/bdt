@@ -141,14 +141,21 @@ def node_output_entities(spec: Spec, resolved: dict[str, Match]) -> dict[str, di
         if atlas is not None:
             base['atlas'] = atlas
 
+        # The real product suffix may be threshold-dependent (dynamic_suffix), e.g.
+        # tractogram_to_pseg -> dseg vs probseg.  Reflect it here so propagation and
+        # entity-driven factory decisions (e.g. warp interpolation) see the true
+        # suffix; build_sink_plan recomputes the same value for the sink name.
+        eff_suffix = out.suffix if out is not None else None
+        if out is not None and out.dynamic_suffix is not None:
+            eff_suffix = out.dynamic_suffix(node.parameters)
         if out is not None and not out.preserve_source:
             # A new-derivative-type action fixes its own suffix/datatype + entities.
-            base['suffix'] = out.suffix
+            base['suffix'] = eff_suffix
             base['datatype'] = out.datatype
             base.update(out.entities)
         elif out is not None:
             # Preserve the source's suffix/datatype (fall back to the spec's).
-            base.setdefault('suffix', out.suffix)
+            base.setdefault('suffix', eff_suffix)
             base.setdefault('datatype', out.datatype)
             base.update(out.entities)
 
@@ -309,17 +316,21 @@ def build_sink_plan(
 
         # Secondary products (e.g. the parcel-coverage map) from other outputnode fields.
         for ep in out.extra:
-            if ep.cifti_only and not cifti_by_node.get(node.name):
+            is_cifti_node = bool(cifti_by_node.get(node.name))
+            if not is_cifti_node and ep.cifti_only and ep.volumetric_extension is None:
                 continue
+            ep_extension = ep.extension if is_cifti_node else (
+                ep.volumetric_extension or ep.extension
+            )
             ep_ent = dict(mid)
             if ep.stat is not None:
-                ep_ent['stat'] = ep.stat
+                ep_ent['statistic'] = ep.stat
             ep_suffix = primary_suffix if ep.match_primary_suffix else ep.suffix
             products.append(
                 OutputProduct(
                     derive=PASSTHROUGH,
                     suffix=ep_suffix,
-                    extension=ep.extension,
+                    extension=ep_extension,
                     entities=ep_ent,
                     sidecar=dict(sidecar),
                     source_field=ep.source_field,

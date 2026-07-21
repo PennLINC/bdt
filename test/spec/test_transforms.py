@@ -22,8 +22,9 @@
 #
 """Tests for the transform graph and the two typed queries."""
 
-import pytest
+import re
 
+import pytest
 from bdt.transforms import (
     NoTransformPathError,
     build_transform_graph,
@@ -185,3 +186,39 @@ def test_image_and_point_chains_are_mirrors(tmp_path):
     # reversed(image) swapped == point (order-reversed, opposite-named)
     reversed_image_swapped = [(s.to, s.frm) for s in reversed(image)]
     assert reversed_image_swapped == _pairs(point)
+
+
+def test_parse_xfm_filename_accepts_a_name_starting_with_from():
+    """A transform BDT generates itself has no subject prefix.
+
+    Regression: the pattern required a leading underscore before ``from-``, so
+    ``from-ACPC_to-T1w_mode-image_xfm.mat`` -- the rigid bridge BDT computes and
+    injects -- was unparseable. Unparseable bridges are silently dropped, which
+    removed ACPC from the transform graph entirely and made every ACPC hop fail
+    with ``NodeNotFound: Target ACPC is not in G``.
+    """
+    xfm = parse_xfm_filename('from-ACPC_to-T1w_mode-image_xfm.mat')
+    assert xfm is not None
+    assert (xfm.frm, xfm.to, xfm.mode) == ('ACPC', 'T1w', 'image')
+    assert xfm.invertible  # an affine .mat; the chain needs T1w->ACPC by inversion
+
+    # still anchored: a bare 'from-' inside another word must not match
+    assert parse_xfm_filename('notfrom-A_to-B_mode-image_xfm.mat') is None
+
+
+def test_generated_acpc_bridge_name_is_parseable():
+    """The name _register_acpc_to_t1w writes must round-trip through the parser.
+
+    These two live in different modules, so nothing else pins them together; if the
+    filename drifts, bridges go back to being silently ignored.
+    """
+    import inspect
+
+    from bdt.engine.factories import _register_acpc_to_t1w
+
+    source = inspect.getsource(_register_acpc_to_t1w)
+    written = re.search(r"os\.path\.abspath\('([^']+)'\)", source).group(1)
+
+    xfm = parse_xfm_filename(written)
+    assert xfm is not None, f'{written!r} does not parse as a BIDS transform'
+    assert (xfm.frm, xfm.to, xfm.mode) == ('ACPC', 'T1w', 'image')

@@ -61,6 +61,18 @@ def _topo_order(nodes: list[Node]) -> list[Node]:
     return ordered
 
 
+def _identity_fields(wf_obj, node_name: str) -> set[str]:
+    """The field names of an ``IdentityInterface`` node inside ``wf_obj``.
+
+    Returns an empty set when the node is absent, so callers can probe for an
+    optional convention without branching on existence.
+    """
+    node = wf_obj.get_node(node_name)
+    if node is None:
+        return set()
+    return set(getattr(node.interface, '_fields', ()) or ())
+
+
 def init_bdt_wf(
     spec: Spec,
     selections: dict[str, str],
@@ -122,6 +134,17 @@ def init_bdt_wf(
             up_kind, up_obj = built[upstream_names[0]]  # single-match; fan-out is a follow-up
             src_field = 'out' if up_kind == 'selection' else 'outputnode.out'
             wf.connect(up_obj, src_field, downstream, f'inputnode.{role}')
+
+            # Secondary labels edge.  A processing node that produces a segmentation
+            # also produces its label table (e.g. tractogram_to_pseg -> EntitiesToSegTSV
+            # on outputnode.tsv); a consumer that needs it declares inputnode.<role>_labels.
+            # Strictly additive: wired only when both sides opt in, so every other
+            # action's graph is byte-identical.
+            if up_kind == 'processing' and 'tsv' in _identity_fields(up_obj, 'outputnode'):
+                if f'{role}_labels' in _identity_fields(downstream, 'inputnode'):
+                    wf.connect(
+                        up_obj, 'outputnode.tsv', downstream, f'inputnode.{role}_labels'
+                    )
 
     if sink_plan and base_directory is not None:
         _attach_sinks(wf, built, sink_plan, base_directory)

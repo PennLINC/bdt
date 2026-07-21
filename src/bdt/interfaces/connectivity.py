@@ -101,8 +101,13 @@ class NiftiParcellate(SimpleInterface):
         masker_lut = masker_lut.loc[masker_lut['index'].isin(atlas_values)].reset_index(drop=True)
 
         # Before anything, we need to measure coverage
+        # NOTE: deliberate divergence from upstream XCP-D, which uses np.uint8 here.
+        # nilearn 0.14.0's NiftiLabelsMasker(strategy='sum') returns 0 for uint8 input
+        # (correct for float), which zeroes the coverage denominator below -> coverage
+        # becomes inf -> `parcel_coverage < min_coverage` is never True -> coverage
+        # thresholding silently no-ops.  float32 is exact for the 0/1 values involved.
         atlas_img_bin = nb.Nifti1Image(
-            (atlas_img.get_fdata() > 0).astype(np.uint8),
+            (atlas_img.get_fdata() > 0).astype(np.float32),
             atlas_img.affine,
             atlas_img.header,
         )
@@ -113,7 +118,10 @@ class NiftiParcellate(SimpleInterface):
             background_label=0,
             mask_img=mask,
             smoothing_fwhm=None,
-            standardize=False,
+            # NOTE: deliberate divergence from upstream XCP-D, which uses standardize=False.
+            # nilearn 0.14.0 raises a FutureWarning for standardize=False; standardize=None
+            # is the non-deprecated equivalent.
+            standardize=None,
             strategy='sum',
             resampling_target=None,  # they should be in the same space/resolution already
             keep_masked_labels=True,
@@ -123,7 +131,10 @@ class NiftiParcellate(SimpleInterface):
             lut=masker_lut,
             background_label=0,
             smoothing_fwhm=None,
-            standardize=False,
+            # NOTE: deliberate divergence from upstream XCP-D, which uses standardize=False.
+            # nilearn 0.14.0 raises a FutureWarning for standardize=False; standardize=None
+            # is the non-deprecated equivalent.
+            standardize=None,
             strategy='sum',
             resampling_target=None,  # they should be in the same space/resolution already
             keep_masked_labels=True,
@@ -173,7 +184,10 @@ class NiftiParcellate(SimpleInterface):
             background_label=0,
             mask_img=mask,
             smoothing_fwhm=None,
-            standardize=False,
+            # NOTE: deliberate divergence from upstream XCP-D, which uses standardize=False.
+            # nilearn 0.14.0 raises a FutureWarning for standardize=False; standardize=None
+            # is the non-deprecated equivalent.
+            standardize=None,
             resampling_target=None,  # they should be in the same space/resolution already
             keep_masked_labels=True,
         )

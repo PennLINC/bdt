@@ -48,7 +48,7 @@ def test_compose_desc():
 def test_bids_name_ordering():
     name = bids_name(
         'sub-01',
-        {'space': 'fsLR', 'atlas': 'HCPMMP1', 'stat': 'mean', 'desc': 'x', 'den': '32k'},
+        {'space': 'fsLR', 'atlas': 'HCPMMP1', 'statistic': 'mean', 'desc': 'x', 'den': '32k'},
         'map',
         '.tsv',
     )
@@ -64,7 +64,7 @@ def test_write_participant(tmp_path):
     dest = sink.write(
         node_name='parc',
         in_file=src,
-        entities={'sub': '01', 'task': 'rest', 'space': 'fsLR', 'atlas': '4S456Parcels'},
+        entities={'subject': '01', 'task': 'rest', 'space': 'fsLR', 'atlas': '4S456Parcels'},
         suffix='timeseries',
         extension='.tsv',
         datatype='func',
@@ -102,7 +102,7 @@ def test_collision_is_error(tmp_path):
     sink = DerivativeSink(tmp_path / 'out')
     kwargs = {
         'in_file': src,
-        'entities': {'sub': '01', 'atlas': 'A'},
+        'entities': {'subject': '01', 'atlas': 'A'},
         'suffix': 'timeseries',
         'extension': '.tsv',
         'datatype': 'func',

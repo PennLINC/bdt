@@ -2,7 +2,7 @@ dataset:
 - name: atlas_4s456
   action: select_atlases
   dataset: atlases
-  filters: {atlas: 4S456Parcels, tpl: MNI152NLin2009cAsym, extension: .nii.gz}
+  filters: {atlas: 4S456Parcels, template: MNI152NLin2009cAsym, extension: .nii.gz}
 
 nodes:
 - name: load_bold

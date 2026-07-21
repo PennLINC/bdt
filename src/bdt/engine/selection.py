@@ -40,7 +40,7 @@ class Match:
     """One file matched by a selection node."""
 
     path: str
-    entities: dict = field(default_factory=dict)  # short-name BIDS entities
+    entities: dict = field(default_factory=dict)  # pybids-named entities
 
 
 class DataProvider(Protocol):
@@ -84,9 +84,9 @@ class DictDataProvider:
         matches = self.data.get(dataset, [])
         out = []
         for m in matches:
-            # subject-independent matches (no ``sub`` entity, e.g. atlases) always pass;
+            # subject-independent matches (no ``subject`` entity, e.g. atlases) always pass;
             # subject-scoped matches must belong to the requested subject.
-            if subject is not None and m.entities.get('sub', subject) != subject:
+            if subject is not None and m.entities.get('subject', subject) != subject:
                 continue
             if _matches(m.entities, filters) and not any(
                 _matches(m.entities, clause) for clause in (exclude or [])
