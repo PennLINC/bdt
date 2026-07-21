@@ -157,7 +157,7 @@ class ResolveApplyTransforms(SimpleInterface):
         for p in list(self.inputs.local_transforms) + list(self.inputs.bridges):
             xfm = parse_xfm_filename(p)
             if xfm is None:
-                iflogger.warning('Ignoring unparseable transform file: %s', p)
+                iflogger.warning('Ignoring unparsable transform file: %s', p)
             else:
                 injected.append(xfm)
         tf_edges = templateflow_edges()

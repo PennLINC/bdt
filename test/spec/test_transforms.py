@@ -194,7 +194,7 @@ def test_parse_xfm_filename_accepts_a_name_starting_with_from():
 
     Regression: the pattern required a leading underscore before ``from-``, so
     ``from-ACPC_to-T1w_mode-image_xfm.mat`` -- the rigid bridge BDT computes and
-    injects -- was unparseable. Unparseable bridges are silently dropped, which
+    injects -- was unparsable. Unparsable bridges are silently dropped, which
     removed ACPC from the transform graph entirely and made every ACPC hop fail
     with ``NodeNotFound: Target ACPC is not in G``.
     """

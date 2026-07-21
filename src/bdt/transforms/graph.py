@@ -51,7 +51,7 @@ import networkx as nx
 # ``(?:^|_)`` rather than a bare ``_``: a transform BDT generates itself has no
 # subject prefix, so its name *starts* with ``from-`` (e.g.
 # ``from-ACPC_to-T1w_mode-image_xfm.mat``).  Requiring the leading underscore made
-# every such file unparseable, and unparseable bridges are dropped -- which silently
+# every such file unparsable, and unparsable bridges are dropped -- which silently
 # removed ACPC from the transform graph entirely.  pybids' own ``from`` entity
 # pattern is anchored the same way.
 _XFM_RE = re.compile(
