@@ -21,6 +21,10 @@ nodes:
     reference: load_fa  # an ACPC-space image defining the output voxel grid
   parameters:
     threshold: 0.0  # enables binarization to 4D dseg
+    # One .tck.gz per bundle, so there is no bundle-set entity to infer a label
+    # from; name it explicitly. Matches the bundles- entity QSIRecon puts on its
+    # own aggregate files (..._bundles-DSIStudio_scalarstats.tsv).
+    atlas: DSIStudio
   write_outputs: true  # also emit the binarized bundle masks
 
 # CBF (ASLPrep) summarized over the bundle ROIs and along-tract
@@ -39,6 +43,8 @@ nodes:
   inputs:
     scalar: load_cbf
     atlas: bundle_rois  # warps ROI dseg -> CBF space
+  parameters:
+    statistics: [mean, standard_deviation]
   write_outputs: true
 - name: cbf_profile
   action: parcellate_scalar_as_tract_profile

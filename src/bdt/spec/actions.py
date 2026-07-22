@@ -172,6 +172,11 @@ class OutputSpec:
     emit_tsv: bool = True  # also flatten a CIFTI product to TSV (false for dense CIFTI)
     output_is_cifti: bool = False  # primary product is CIFTI regardless of input
     dynamic_suffix: object = None  # optional Callable[[dict params], str] overriding suffix
+    #: When set, the sub-workflow already produces the tabular form on this
+    #: ``outputnode`` field, so the sink passes it through instead of converting the
+    #: native CIFTI.  Used where the table holds several statistics at once and so
+    #: cannot be derived from any single CIFTI file.
+    tsv_source_field: str | None = None
 
     def __post_init__(self):
         if self.entities is None:
@@ -242,6 +247,7 @@ def _o(
     emit_tsv=True,
     output_is_cifti=False,
     dynamic_suffix=None,
+    tsv_source_field=None,
     **entities,
 ) -> OutputSpec:
     return OutputSpec(
@@ -257,6 +263,7 @@ def _o(
         emit_tsv=emit_tsv,
         output_is_cifti=output_is_cifti,
         dynamic_suffix=dynamic_suffix,
+        tsv_source_field=tsv_source_field,
     )
 
 
@@ -303,7 +310,7 @@ _ACTIONS: tuple[ActionSpec, ...] = (
             _r('scalar', 'scalar', 'surface_scalar', 'subcortical_volume', 'dense_cifti'),
             _r('atlas', 'atlas'),
         ),
-        parameters=frozenset({'min_coverage'}),
+        parameters=frozenset({'min_coverage', 'statistics'}),
         # Data-identity-preserving: keeps the source suffix/datatype/stat/desc,
         # just adds atlas- and parcellates (dscalar -> pscalar + tsv).
         out=_o(
@@ -313,6 +320,7 @@ _ACTIONS: tuple[ActionSpec, ...] = (
             primary_role='scalar',
             cifti_extension='.pscalar.nii',
             preserve_source=True,
+            tsv_source_field='tsv',
             extra=(
                 ExtraProduct(
                     'coverage',
@@ -428,7 +436,7 @@ _ACTIONS: tuple[ActionSpec, ...] = (
                 list_ok=False,
             ),
         ),
-        parameters=frozenset({'threshold'}),
+        parameters=frozenset({'threshold', 'atlas'}),
         out=_o(
             'probseg',
             '.nii.gz',

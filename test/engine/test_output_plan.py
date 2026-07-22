@@ -22,6 +22,8 @@
 #
 """Unit tests for the output plan (entity composition + product list). No nipype."""
 
+import pytest
+
 from bdt.engine.selection import Match
 from bdt.outputs.plan import CIFTI_TO_TSV, PASSTHROUGH, build_sink_plan, node_output_entities
 from bdt.spec import load_spec, parse_spec
@@ -188,14 +190,23 @@ def test_parcellate_scalar_preserves_source_naming():
     prods = plan['alff_parc']
     # native pscalar + tsv, both keeping the source suffix (boldmap) and stat-alff,
     # plus the parcel-coverage map (Task 5: parcellate_scalar now plans coverage too).
+    # The default statistics request is a single 'mean', so there is still exactly
+    # one pscalar -- but it now carries the composed statistic 'alff+mean' (Task 5),
+    # and the tsv is a PASSTHROUGH of the sub-workflow's merged 'tsv' field rather
+    # than a CIFTI_TO_TSV conversion, since the table holds every statistic at once.
     assert [(p.derive, p.suffix, p.extension) for p in prods] == [
         (PASSTHROUGH, 'boldmap', '.pscalar.nii'),
-        (CIFTI_TO_TSV, 'boldmap', '.tsv'),
+        (PASSTHROUGH, 'boldmap', '.tsv'),
         (PASSTHROUGH, 'map', '.pscalar.nii'),  # coverage map
     ]
-    assert prods[0].entities['statistic'] == 'alff'  # not overwritten with 'mean'
+    assert prods[0].entities['statistic'] == 'alff+mean'  # source stat + parcel stat, composed
     assert prods[0].entities['atlas'] == '4S1056Parcels'
+    assert prods[0].source_field == 'out_mean'
     assert 'suffix' not in prods[0].entities  # pulled out to the explicit field
+    # the tidy table keeps the source's own statistic -- it holds every requested
+    # statistic as columns, not just one -- and is read straight off the sub-workflow.
+    assert prods[1].entities['statistic'] == 'alff'
+    assert prods[1].source_field == 'tsv'
     assert prods[2].source_field == 'coverage'
     assert prods[2].entities['statistic'] == 'coverage'
 
@@ -241,9 +252,16 @@ def _pseg_spec(threshold):
         }
     )
     resolved = {
+        # one aggregate file for the whole bundle set, so the atlas label infers
+        # from its ``bundles-`` entity
         'load_bundles': Match(
-            path='/x/sub-01_bundle-CST_space-ACPC_streamlines.tck.gz',
-            entities={'subject': '01', 'space': 'ACPC', 'suffix': 'streamlines'},
+            path='/x/sub-01_bundles-DSIStudio_space-ACPC_streamlines.tck.gz',
+            entities={
+                'subject': '01',
+                'space': 'ACPC',
+                'suffix': 'streamlines',
+                'bundles': 'DSIStudio',
+            },
         ),
         'load_ref': Match(
             path='/x/sub-01_param-fa_space-ACPC_dwimap.nii.gz',
@@ -367,3 +385,139 @@ def test_cifti_parcellate_timeseries_coverage_still_pscalar():
         ('timeseries', '.tsv', 'out'),
         ('boldmap', '.pscalar.nii', 'coverage'),
     ]
+
+
+def test_atlas_label_inferred_from_the_bundle_set_entity():
+    """One aggregate tractogram carries ``bundles-<Set>``; that names the atlas.
+
+    Every downstream parcellation inherits it, so without a label the outputs are
+    indistinguishable and two atlases in one spec collide.
+    """
+    spec, resolved = _pseg_spec(threshold=0.5)
+    entities = node_output_entities(spec, resolved)
+    assert entities['bundle_rois']['atlas'] == 'DSIStudio'
+
+    primary = next(p for p in build_sink_plan(spec, resolved, {})['bundle_rois']
+                   if p.extension == '.nii.gz')
+    assert primary.entities['atlas'] == 'DSIStudio'
+
+
+def test_explicit_atlas_parameter_wins_over_inference():
+    spec, resolved = _pseg_spec(threshold=0.5)
+    node = spec.by_name()['bundle_rois']
+    node.parameters['atlas'] = 'MyBundles'
+    entities = node_output_entities(spec, resolved)
+    assert entities['bundle_rois']['atlas'] == 'MyBundles'
+
+
+def test_per_bundle_source_without_an_atlas_parameter_raises():
+    """One file *per bundle* has no common set name -- require an explicit label
+    rather than guessing one that lands in every downstream filename."""
+    spec, resolved = _pseg_spec(threshold=0.5)
+    resolved['load_bundles'] = Match(
+        path='/x/sub-01_bundle-CST_space-ACPC_streamlines.tck.gz',
+        entities={'subject': '01', 'space': 'ACPC', 'suffix': 'streamlines',
+                  'bundle': 'CST'},
+    )
+    with pytest.raises(ValueError, match='atlas: MyAtlas'):
+        node_output_entities(spec, resolved)
+
+
+def _cifti_scalar_spec(**parameters):
+    spec = parse_spec(
+        {
+            'nodes': [
+                {
+                    'name': 'load_alff',
+                    'action': 'select_data',
+                    'dataset': 'xcpd',
+                    'filters': {'suffix': 'boldmap', 'statistic': 'alff'},
+                },
+                {
+                    'name': 'atlas',
+                    'action': 'select_atlases',
+                    'dataset': 'atlases',
+                    'filters': {'atlas': '4S1056Parcels'},
+                },
+                {
+                    'name': 'alff_parc',
+                    'action': 'parcellate_scalar',
+                    'inputs': {'scalar': 'load_alff', 'atlas': 'atlas'},
+                    'parameters': parameters,
+                    'write_outputs': True,
+                },
+            ]
+        }
+    )
+    resolved = {
+        'load_alff': Match(
+            path='/x/sub-01_stat-alff_boldmap.dscalar.nii',
+            entities={
+                'subject': '01', 'space': 'fsLR', 'den': '91k', 'statistic': 'alff',
+                'suffix': 'boldmap', 'datatype': 'func', 'extension': '.dscalar.nii',
+            },
+        ),
+        'atlas': Match(path='/a/atlas.dlabel.nii', entities={'atlas': '4S1056Parcels'}),
+    }
+    return spec, resolved
+
+
+def test_cifti_scalar_plans_one_pscalar_per_statistic_and_one_tsv():
+    spec, resolved = _cifti_scalar_spec(statistics=['mean', 'standard_deviation'])
+    prods = build_sink_plan(spec, resolved, roots={'xcpd': '/x', 'atlases': '/a'})['alff_parc']
+
+    pscalars = [p for p in prods if p.extension == '.pscalar.nii' and p.suffix == 'boldmap']
+    tsvs = [p for p in prods if p.extension == '.tsv' and p.suffix == 'boldmap']
+    assert len(pscalars) == 2
+    assert len(tsvs) == 1, 'the tidy table is singular, whatever the statistic count'
+
+    # source statistic first, joined with '+', normalized to alphanumerics
+    assert [p.entities['statistic'] for p in pscalars] == [
+        'alff+mean', 'alff+standarddeviation'
+    ]
+    # each reads its own outputnode field
+    assert [p.source_field for p in pscalars] == ['out_mean', 'out_standard_deviation']
+    # the tidy table keeps the source's own statistic and is passed through, not converted
+    assert tsvs[0].entities['statistic'] == 'alff'
+    assert tsvs[0].source_field == 'tsv'
+    assert tsvs[0].derive == PASSTHROUGH
+
+
+def test_cifti_scalar_default_plans_a_single_mean_pscalar():
+    spec, resolved = _cifti_scalar_spec()
+    prods = build_sink_plan(spec, resolved, roots={'xcpd': '/x', 'atlases': '/a'})['alff_parc']
+    pscalars = [p for p in prods if p.extension == '.pscalar.nii' and p.suffix == 'boldmap']
+    assert len(pscalars) == 1
+    assert pscalars[0].entities['statistic'] == 'alff+mean'
+    assert pscalars[0].source_field == 'out_mean'
+
+
+def test_volumetric_scalar_plans_one_tsv_and_no_pscalar():
+    spec, resolved = _cifti_scalar_spec(statistics=['mean', 'standard_deviation'])
+    resolved['load_alff'] = Match(
+        path='/x/sub-01_stat-alff_boldmap.nii.gz',
+        entities={
+            'subject': '01', 'space': 'MNI152NLin6Asym', 'statistic': 'alff',
+            'suffix': 'boldmap', 'datatype': 'func', 'extension': '.nii.gz',
+        },
+    )
+    prods = build_sink_plan(spec, resolved, roots={'xcpd': '/x', 'atlases': '/a'})['alff_parc']
+    assert not [p for p in prods if p.extension == '.pscalar.nii']
+    primary = [p for p in prods if p.suffix == 'boldmap' and p.extension == '.tsv']
+    assert len(primary) == 1
+    assert primary[0].entities['statistic'] == 'alff'  # the table holds every statistic
+    assert primary[0].source_field == 'out'
+
+
+def test_per_bundle_atlas_label_does_not_leak_the_single_bundle_entity():
+    """The aggregated atlas is not 'the CST' -- drop the per-bundle entity."""
+    spec, resolved = _pseg_spec(threshold=0.5)
+    resolved['load_bundles'] = Match(
+        path='/x/sub-01_bundle-CST_space-ACPC_streamlines.tck.gz',
+        entities={'subject': '01', 'space': 'ACPC', 'suffix': 'streamlines',
+                  'bundle': 'CST'},
+    )
+    spec.by_name()['bundle_rois'].parameters['atlas'] = 'MyBundles'
+    entities = node_output_entities(spec, resolved)
+    assert entities['bundle_rois']['atlas'] == 'MyBundles'
+    assert 'bundle' not in entities['bundle_rois']

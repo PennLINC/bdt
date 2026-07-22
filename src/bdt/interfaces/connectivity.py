@@ -102,10 +102,17 @@ class NiftiParcellate(SimpleInterface):
 
         # Before anything, we need to measure coverage
         # NOTE: deliberate divergence from upstream XCP-D, which uses np.uint8 here.
-        # nilearn 0.14.0's NiftiLabelsMasker(strategy='sum') returns 0 for uint8 input
-        # (correct for float), which zeroes the coverage denominator below -> coverage
-        # becomes inf -> `parcel_coverage < min_coverage` is never True -> coverage
-        # thresholding silently no-ops.  float32 is exact for the 0/1 values involved.
+        # `strategy='sum'` accumulates in the *input* dtype, so a uint8 image of ones
+        # wraps modulo 256: a parcel of 256 voxels sums to 0, one of 300 sums to 44.
+        # These are the counts forming the coverage denominator below, so coverage came
+        # out inf (0 denominator) or silently wrong (wrapped denominator), and
+        # `parcel_coverage < min_coverage` stopped meaning anything.
+        #
+        # Measured on nilearn 0.14.0 (true count -> uint8 result): 100 -> 100,
+        # 255 -> 255, 256 -> 0, 300 -> 44, 511 -> 255.  Note parcels of 255 voxels or
+        # fewer are correct, so a small test fixture will NOT reproduce this -- real
+        # atlas parcels are hundreds to thousands of voxels.  float32 accumulates
+        # exactly for the 0/1 values involved.
         atlas_img_bin = nb.Nifti1Image(
             (atlas_img.get_fdata() > 0).astype(np.float32),
             atlas_img.affine,

@@ -49,6 +49,7 @@ from bdt.outputs.provenance import bids_uri, build_sidecar, generated_by
 from bdt.outputs.sink import compose_desc
 from bdt.spec.model import Node, Spec
 from bdt.utils.cifti import is_cifti
+from bdt.utils.statistics import compose_statistic_entity, parse_statistics
 
 # How a product's bytes are derived from a node's ``outputnode.out``.
 PASSTHROUGH = 'passthrough'  # copy outputnode.out as-is (the native product)
@@ -90,6 +91,32 @@ def _atlas_label(node: Node, entities_by_node: dict[str, dict]) -> str | None:
             if up_ent.get('atlas'):
                 return up_ent['atlas']
     return None
+
+
+def _own_atlas_label(node: Node, base: dict) -> str:
+    """The ``atlas`` entity for a node that *builds* an atlas.
+
+    An explicit ``atlas`` parameter always wins.  Failing that, the label is
+    inferred from the source's **bundle-set** entity (``bundles-``), which exists
+    only when every streamline came from one aggregate file — e.g.
+    ``..._bundles-DSIStudio_streamlines.tck.gz`` gives ``atlas-DSIStudio``.
+
+    When the source is one file *per bundle* (``bundle-<Name>``, the QSIRecon
+    layout) there is no common set name to infer, so an explicit parameter is
+    required rather than guessed: the label ends up in every downstream filename.
+    """
+    explicit = node.parameters.get('atlas')
+    if explicit:
+        return str(explicit)
+    inferred = base.get('bundles')
+    if inferred:
+        return str(inferred)
+    raise ValueError(
+        f'Node {node.name!r} builds an atlas but its label cannot be inferred: the '
+        "source carries no 'bundles' (bundle-set) entity, which happens when there "
+        'is one file per bundle rather than a single aggregate file. Set it '
+        f"explicitly, e.g.\n  - name: {node.name}\n    parameters: {{atlas: MyAtlas}}"
+    )
 
 
 def _primary_upstream(node: Node) -> str | None:
@@ -140,6 +167,13 @@ def node_output_entities(spec: Spec, resolved: dict[str, Match]) -> dict[str, di
         atlas = _atlas_label(node, entities)
         if atlas is not None:
             base['atlas'] = atlas
+
+        # A node that *produces* an atlas has none to inherit, so it must name its
+        # own.  Otherwise every downstream parcellation is unlabelled and two atlases
+        # in one spec collide.
+        if aspec is not None and aspec.produces == 'atlas':
+            base['atlas'] = _own_atlas_label(node, base)
+            base.pop('bundle', None)  # a per-bundle label does not survive aggregation
 
         # The real product suffix may be threshold-dependent (dynamic_suffix), e.g.
         # tractogram_to_pseg -> dseg vs probseg.  Reflect it here so propagation and
@@ -277,27 +311,54 @@ def build_sink_plan(
         common = {'datatype': datatype, 'scope': node.scope}
 
         if cifti_by_node.get(node.name) and cifti_suffix and out.cifti_extension:
-            # Native CIFTI product (ptseries/pconn/pscalar/dscalar).
-            products.append(
-                OutputProduct(
-                    derive=PASSTHROUGH,
-                    suffix=cifti_suffix,
-                    extension=out.cifti_extension,
-                    entities=dict(mid),
-                    sidecar=dict(sidecar),
-                    **common,
+            # One native CIFTI per statistic: a parcellated CIFTI holds a single
+            # value per parcel, so several statistics need several files.  Actions
+            # that do not accept ``statistics`` keep exactly one product.
+            if 'statistics' in aspec.parameters:
+                requested = parse_statistics(node.parameters)
+            else:
+                requested = []
+            if requested:
+                source_statistic = mid.get('statistic')
+                for stat in requested:
+                    stat_ent = dict(mid)
+                    stat_ent['statistic'] = compose_statistic_entity(source_statistic, stat)
+                    products.append(
+                        OutputProduct(
+                            derive=PASSTHROUGH,
+                            suffix=cifti_suffix,
+                            extension=out.cifti_extension,
+                            entities=stat_ent,
+                            sidecar=dict(sidecar),
+                            source_field=f'out_{stat}',
+                            **common,
+                        )
+                    )
+            else:
+                products.append(
+                    OutputProduct(
+                        derive=PASSTHROUGH,
+                        suffix=cifti_suffix,
+                        extension=out.cifti_extension,
+                        entities=dict(mid),
+                        sidecar=dict(sidecar),
+                        **common,
+                    )
                 )
-            )
             # ... plus a flattened TSV for tabular (parcellated) outputs, but not for
             # a dense CIFTI (a resampled/mapped surface scalar has no table form).
+            # The table holds every statistic at once, so it keeps the source's own
+            # ``statistic`` entity and is read straight off the sub-workflow when the
+            # action builds it there.
             if out.emit_tsv:
                 products.append(
                     OutputProduct(
-                        derive=CIFTI_TO_TSV,
+                        derive=PASSTHROUGH if out.tsv_source_field else CIFTI_TO_TSV,
                         suffix=tsv_suffix,
                         extension=out.extension,
                         entities=dict(mid),
                         sidecar=dict(sidecar),
+                        source_field=out.tsv_source_field or 'out',
                         **common,
                     )
                 )

@@ -94,7 +94,9 @@ Supported operations
    * - ``parcellate_timeseries``
      - Extract per-parcel mean time series from a 4D image (BOLD, ASL).
    * - ``parcellate_scalar``
-     - Extract per-parcel means from a scalar map (CBF, FA/MD, thickness, …).
+     - Summarize a scalar map (CBF, FA/MD, thickness, …) over parcels. The
+       ``statistics`` parameter names which summaries to compute — ``mean``
+       (the default) and/or ``standard_deviation``.
    * - ``functional_connectivity``
      - Build a region-by-region connectivity matrix from parcellated time series.
    * - ``streamline_connectivity``
