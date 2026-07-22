@@ -22,22 +22,67 @@
 #
 """The per-parcel statistic vocabulary, shared by the plan and the factories.
 
-Statistic names are chosen to match nilearn's ``strategy`` vocabulary so the
-volumetric path can pass them straight to ``NiftiLabelsMasker``.  ``mean`` and
-``standard_deviation`` are the only ones implemented; nilearn and Workbench both
-offer more, and adding one is a matter of extending
-:data:`SUPPORTED_STATISTICS` plus the two backend lookup tables.
+Statistic names are nilearn's ``strategy`` vocabulary verbatim, so the volumetric
+path passes them straight to ``NiftiLabelsMasker`` and only the grayordinate path
+needs a lookup table.  :data:`SUPPORTED_STATISTICS` is exactly nilearn's set of
+seven; every one of them has a Workbench ``-method`` equivalent, so both backends
+support the whole vocabulary.
+
+Probabilistic (4D) atlases are the exception — see
+:data:`WEIGHTED_STATISTICS`.
 """
 
 from __future__ import annotations
 
 import re
 
-#: Statistics a spec may request.  ``standard_deviation`` is the *population* SD
-#: (ddof=0) across a parcel's voxels/vertices — what ``numpy.std()``,
-#: ``NiftiLabelsMasker(strategy='standard_deviation')`` and Workbench's
-#: ``-method STDEV`` all return.
-SUPPORTED_STATISTICS = ('mean', 'standard_deviation')
+#: Statistics a spec may request, in nilearn's ``strategy`` vocabulary.  This is
+#: exactly the set ``NiftiLabelsMasker`` accepts (verified against nilearn 0.14.0,
+#: which rejects anything else with "'strategy' must be one of …").
+#:
+#: ``standard_deviation`` and ``variance`` are *population* moments (ddof=0) —
+#: what ``numpy.std()``/``numpy.var()``, nilearn and Workbench's ``STDEV``/
+#: ``VARIANCE`` all return.  Workbench's ``SAMPSTDEV`` (ddof=1) has no nilearn
+#: counterpart and is deliberately not offered, so the two backends agree.
+SUPPORTED_STATISTICS = (
+    'mean',
+    'median',
+    'sum',
+    'minimum',
+    'maximum',
+    'standard_deviation',
+    'variance',
+)
+
+#: statistic -> ``wb_command -cifti-parcellate -method`` for the grayordinate path.
+#: Every supported statistic maps; the names simply differ from nilearn's.
+WORKBENCH_METHOD = {
+    'mean': 'MEAN',
+    'median': 'MEDIAN',
+    'sum': 'SUM',
+    'minimum': 'MIN',
+    'maximum': 'MAX',
+    'standard_deviation': 'STDEV',
+    'variance': 'VARIANCE',
+}
+
+#: Statistics whose Workbench method refuses ``-cifti-weights``::
+#:
+#:     ERROR: weighted reduction not supported for 'MIN' method
+#:
+#: Measured against wb_command by trying every method in :data:`WORKBENCH_METHOD`;
+#: MEAN/MEDIAN/SUM/STDEV/VARIANCE all accept weights, MIN and MAX do not (they are
+#: selections, so there is nothing for a weight to scale).  The grayordinate path
+#: therefore NaN-masks the data for these two and relies on ``-only-numeric``
+#: instead — see :func:`~bdt.engine.factories._init_parcellate_cifti_wf`.
+WORKBENCH_UNWEIGHTED = ('minimum', 'maximum')
+
+#: What a *probabilistic* (4D, non-binarized) atlas can express.  Weighting is
+#: intrinsic to such an atlas, and only the weighted moments have an agreed
+#: definition — a "weighted median"/"weighted minimum" would be an invention, and
+#: a weighted sum is just an unnormalized mean.  Requesting anything else with a
+#: 4D atlas is an error rather than a silent substitution.
+WEIGHTED_STATISTICS = ('mean', 'standard_deviation')
 
 _ENTITY_ILLEGAL = re.compile(r'[^A-Za-z0-9+]')
 

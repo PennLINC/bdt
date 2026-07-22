@@ -106,10 +106,19 @@ dedicated suffix; anatomical morphometrics use the ``morph`` suffix with
 `BEP 011`_ columns; diffusion scalars carry ``model-``/``param-`` per `BEP 016`_.
 
 Whatever the suffix, the TSV is **tidy**: one row per parcel, a ``node`` column
-naming it, and one column per requested statistic (``mean``,
-``standard_deviation``), in the order the ``statistics`` parameter lists them.
-This is the same shape as the along-tract profile tables, and it is the same for
-volumetric and grayordinate inputs.
+naming it, and one column per requested statistic, in the order the ``statistics``
+parameter lists them. This is the same shape as the along-tract profile tables,
+and it is the same for volumetric and grayordinate inputs.
+
+``parcellate_timeseries`` is the exception. Its table is wide (timepoints ×
+parcels), so a second statistic has nowhere to go as a column and each one gets
+its own file instead::
+
+    sub-<label>_..._atlas-<label>_stat-mean_timeseries.tsv
+    sub-<label>_..._atlas-<label>_stat-standarddeviation_timeseries.tsv
+
+The default ``statistics: [mean]`` therefore reproduces the single
+``stat-mean_timeseries.tsv`` that has always been written.
 
 A grayordinate ``parcellate_scalar`` additionally keeps its native parcellated
 CIFTIs, and since a pscalar holds a single value per parcel, there is **one file

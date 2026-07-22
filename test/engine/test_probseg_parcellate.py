@@ -45,7 +45,7 @@ def test_weighted_mean_within_mask_matches_brute_force(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
     res = _run(tmp_path, min_coverage=0.0)
-    got = pd.read_table(res.outputs.timeseries)
+    got = pd.read_table(res.outputs.out_files[0])
 
     inside = mask > 0
     for i, name in enumerate(['a', 'b', 'c']):
@@ -71,7 +71,7 @@ def test_binarize_equals_plain_mean_within_parcel_and_mask(tmp_path, monkeypatch
     monkeypatch.chdir(tmp_path)
 
     res = _run(tmp_path, binarize=True, min_coverage=0.0)
-    got = pd.read_table(res.outputs.timeseries)
+    got = pd.read_table(res.outputs.out_files[0])
 
     inside = mask > 0
     for i, name in enumerate(['a', 'b']):
@@ -109,7 +109,7 @@ def test_parcels_below_min_coverage_are_nan(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
     res = _run(tmp_path, min_coverage=0.5)
-    ts = pd.read_table(res.outputs.timeseries)
+    ts = pd.read_table(res.outputs.out_files[0])
     coverage = pd.read_table(res.outputs.coverage, index_col='Node')['coverage']
 
     assert list(ts.columns) == ['keep', 'drop']
@@ -128,7 +128,7 @@ def test_scalar_input_produces_one_row(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
     res = _run(tmp_path, min_coverage=0.0)
-    ts = pd.read_table(res.outputs.timeseries)
+    ts = pd.read_table(res.outputs.out_files[0])
     assert ts.shape == (1, 1)
     assert ts['a'][0] == pytest.approx(7.0)
 

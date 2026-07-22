@@ -52,6 +52,31 @@ def is_cifti(path: str | Path) -> bool:
     return str(path).endswith(_CIFTI_EXTENSIONS)
 
 
+def is_cifti_probseg(path: str | Path) -> bool:
+    """Whether a CIFTI atlas is *probabilistic* (a dscalar) rather than a dlabel.
+
+    Decided by the header, not the filename: BDT's own ``restrict_atlas`` writes a
+    ``.dlabel.nii`` name regardless of what went in, so a dscalar probseg reaches
+    ``wb_command`` wearing a dlabel name and is rejected there with "input cifti
+    label file has the wrong mapping types".  A dlabel has a ``LabelAxis``; a
+    probseg has a ``ScalarAxis``, one map per region.
+    """
+    import os
+
+    import nibabel as nb
+
+    if not is_cifti(path):
+        return False
+    if not os.path.exists(str(path)):
+        # Not yet on disk (a build-time stub, or a path that will fail later anyway):
+        # fall back to the extension.  Safe here because the file inspected is always
+        # the original *selection*, whose name comes from the atlas dataset -- it is
+        # BDT's own derived copies that carry a misleading .dlabel.nii name.
+        return str(path).endswith('.dscalar.nii')
+    img = nb.load(str(path))
+    return not isinstance(img.header.get_axis(0), nb.cifti2.LabelAxis)
+
+
 def cifti_to_tsv(cifti_path: str | Path, out_path: str | Path) -> str:
     """Write a parcellated CIFTI (ptseries / pscalar / pconn) to a TSV.
 

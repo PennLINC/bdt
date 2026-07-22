@@ -74,7 +74,7 @@ def test_compile_story_3_1_to_nipype_workflow():
     assert 'load_bold' in names
     assert 'atlas_4s456' in names
     # processing sub-workflow internals (proves the factories ran + connected)
-    assert 'parcellate_bold.parcellate_data' in names
+    assert 'parcellate_bold.parcellate_data_mean' in names
     assert 'parcellate_bold.vertex_mask' in names  # coverage-aware pipeline
     assert 'parcellate_bold.restrict_atlas' in names  # atlas -> data brainordinates
     assert 'parcellate_bold.inputnode' in names

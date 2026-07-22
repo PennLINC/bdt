@@ -43,6 +43,8 @@ from nipype.interfaces.base import (
     traits,
 )
 
+from bdt.utils.statistics import WEIGHTED_STATISTICS
+
 LOGGER = logging.getLogger('nipype.interface')
 
 
@@ -71,18 +73,30 @@ class _ProbSegParcellateInputSpec(BaseInterfaceInputSpec):
         usedefault=True,
         desc='Parcels with coverage below this are replaced with NaN.',
     )
+    statistics = traits.List(
+        traits.Str,
+        value=['mean'],
+        usedefault=True,
+        desc=(
+            'Weighted statistics to compute, in request order; one wide table each. '
+            'Only the weighted definitions apply -- see WEIGHTED_STATISTICS.'
+        ),
+    )
 
 
 class _ProbSegParcellateOutputSpec(TraitedSpec):
-    timeseries = File(exists=True, desc='Parcellated time series file.')
+    out_files = traits.List(File(exists=True), desc='one table per statistic, in request order')
     coverage = File(exists=True, desc='Parcel-wise coverage file.')
 
 
 class ProbSegParcellate(SimpleInterface):
-    """Mask-restricted weighted mean of a 4D atlas' regions.
+    """Mask-restricted weighted statistics of a 4D atlas' regions.
 
-    ``value = sum(w * d) / sum(w)`` over voxels inside the brain mask, where ``w``
-    is the region's probability map.  ``coverage = sum(w * mask) / sum(w)``, taken
+    The mean is ``sum(w * d) / sum(w)`` over voxels inside the brain mask, where
+    ``w`` is the region's probability map, and the standard deviation the matching
+    weighted *population* SD ``sqrt(sum(w * (d - mu)^2) / sum(w))`` -- the same
+    definitions :class:`~bdt.interfaces.cifti_probseg.CiftiProbSegParcellate` uses
+    for grayordinates, so the two modalities agree.  ``coverage = sum(w * mask) / sum(w)``, taken
     from the atlas and mask alone -- the data never enters it, on the assumption
     (see the design doc) that the brain mask already excludes NaN and
     zero-variance voxels.
@@ -128,13 +142,36 @@ class ProbSegParcellate(SimpleInterface):
         with np.errstate(invalid='ignore', divide='ignore'):
             coverage = np.where(total_weight > 0, covered / total_weight, 0.0)
 
+        statistics = list(self.inputs.statistics)
+        undefined = [s for s in statistics if s not in WEIGHTED_STATISTICS]
+        if undefined:
+            raise ValueError(
+                f'Atlas {self.inputs.atlas} is 4D (probabilistic), where only '
+                f'{", ".join(WEIGHTED_STATISTICS)} have a weighted definition, but '
+                f'{", ".join(undefined)} was requested. Either request only the '
+                f'weighted statistics or supply a 3D label atlas.'
+            )
+
         n_t = data.shape[0]
-        values = np.full((n_t, n_parcels), np.nan, dtype='float64')
+        values = {s: np.full((n_t, n_parcels), np.nan, dtype='float64') for s in statistics}
         usable = (covered > 0) & (coverage >= self.inputs.min_coverage)
         if usable.any():
+            w = weights[usable]
             # (n_parcels, n_vox) @ (n_vox, n_t) -> (n_parcels, n_t), then transpose
-            num = weights[usable] @ data.T
-            values[:, usable] = (num / covered[usable][:, None]).T
+            means = (w @ data.T) / covered[usable][:, None]
+            if 'mean' in values:
+                values['mean'][:, usable] = means.T
+            if 'standard_deviation' in values:
+                # deviations formed explicitly rather than via E[d^2] - mu^2, which
+                # cancels catastrophically on data with a large offset (BOLD ~10000);
+                # one parcel at a time keeps the (n_parcels, n_t, n_vox) array off the heap
+                sd = np.empty_like(means)
+                for row in range(w.shape[0]):
+                    deviation = data - means[row][:, None]
+                    sd[row] = np.sqrt(
+                        (w[row] * deviation**2).sum(axis=1) / covered[usable][row]
+                    )
+                values['standard_deviation'][:, usable] = sd.T
 
         n_dropped = int((~usable).sum())
         if n_dropped:
@@ -145,10 +182,13 @@ class ProbSegParcellate(SimpleInterface):
                 self.inputs.min_coverage,
             )
 
-        self._results['timeseries'] = os.path.join(runtime.cwd, 'timeseries.tsv')
-        pd.DataFrame(values, columns=names).to_csv(
-            self._results['timeseries'], sep='\t', na_rep='n/a', index=False
-        )
+        self._results['out_files'] = []
+        for stat in statistics:
+            path = os.path.join(runtime.cwd, f'parcellated_{stat}.tsv')
+            pd.DataFrame(values[stat], columns=names).to_csv(
+                path, sep='\t', na_rep='n/a', index=False
+            )
+            self._results['out_files'].append(path)
 
         self._results['coverage'] = os.path.join(runtime.cwd, 'coverage.tsv')
         pd.DataFrame(coverage.astype(np.float32), index=names, columns=['coverage']).to_csv(

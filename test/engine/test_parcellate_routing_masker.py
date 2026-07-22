@@ -66,7 +66,7 @@ def test_3d_dseg_atlas_uses_xcpd_nifti_parcellate(tmp_path):
 
     ctx = _context(_atlas(tmp_path, 3), _mask(tmp_path))
     wf = init_parcellate_timeseries_wf(_node(min_coverage=0.5), context=ctx)
-    parcellate = wf.get_node('parcellate')
+    parcellate = wf.get_node('parcellate_mean')
     assert isinstance(parcellate.interface, NiftiParcellate)
     assert parcellate.inputs.min_coverage == 0.5
     # the sidecar is resolved from the selection, not the warped atlas
@@ -98,7 +98,7 @@ def test_brain_mask_is_discovered_and_wired(tmp_path):
     mask = _mask(tmp_path)
     ctx = _context(_atlas(tmp_path, 3), mask)
     wf = init_parcellate_timeseries_wf(_node(), context=ctx)
-    assert wf.get_node('parcellate').inputs.mask == mask
+    assert wf.get_node('parcellate_mean').inputs.mask == mask
 
 
 def test_missing_brain_mask_is_a_hard_error(tmp_path):
@@ -114,7 +114,9 @@ def test_outputnode_exposes_out_and_coverage(tmp_path):
     wf = init_parcellate_timeseries_wf(_node(), context=ctx)
     from bdt.engine.workflow import _identity_fields
 
-    assert _identity_fields(wf, 'outputnode') == {'out', 'coverage'}
+    # ``out_mean`` joins them now that the node fans out per statistic; ``out``
+    # still mirrors the first requested one, so role wiring is unchanged.
+    assert _identity_fields(wf, 'outputnode') == {'out', 'coverage', 'out_mean'}
 
 
 def test_hand_rolled_parcellate_module_is_gone():
@@ -263,7 +265,7 @@ def test_brain_mask_query_is_scoped_to_the_data_acquisition(tmp_path):
     provider = _mask_provider(tmp_path, _MASKS)
     node, ctx = _bold_node_and_context(tmp_path, provider)
 
-    chosen = init_parcellate_timeseries_wf(node, context=ctx).get_node('parcellate').inputs.mask
+    chosen = init_parcellate_timeseries_wf(node, context=ctx).get_node('parcellate_mean').inputs.mask
     assert 'task-rest_acq-multiband' in chosen, chosen
     assert 'fracback' not in chosen, chosen
     assert 'rec-refaced' not in chosen, chosen
@@ -280,7 +282,7 @@ def test_brain_mask_falls_back_when_scoping_over_constrains(tmp_path):
     provider = _mask_provider(tmp_path, [only_mask])
     node, ctx = _bold_node_and_context(tmp_path, provider, bold_entities=bold)
 
-    chosen = init_parcellate_timeseries_wf(node, context=ctx).get_node('parcellate').inputs.mask
+    chosen = init_parcellate_timeseries_wf(node, context=ctx).get_node('parcellate_mean').inputs.mask
     assert 'task-rest_acq-multiband' in chosen, chosen
 
 

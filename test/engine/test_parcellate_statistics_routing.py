@@ -80,30 +80,65 @@ def test_cifti_tidy_tsv_node_receives_every_statistic():
     assert edges[('statistic_list', 'to_tsv')] == [('out', 'in_files')]
 
 
-def test_parcellate_timeseries_cifti_is_untouched():
-    """The timeseries path keeps its original node names and outputnode fields."""
-    node = SimpleNamespace(
+def _cifti_timeseries_node(**parameters):
+    return SimpleNamespace(
         name='parc',
         inputs={'timeseries': ['load_bold'], 'atlas': ['load_atlas']},
-        parameters={},
+        parameters=parameters,
         desc=None,
     )
-    ctx = FactoryContext(
+
+
+def _cifti_timeseries_context():
+    return FactoryContext(
         resolved={
             'load_bold': Match('b.dtseries.nii', {'extension': '.dtseries.nii'}),
             'load_atlas': Match('a.dlabel.nii', {'extension': '.dlabel.nii'}),
         }
     )
-    wf = init_parcellate_timeseries_wf(node, context=ctx)
+
+
+def test_parcellate_timeseries_cifti_default_builds_one_parcellation():
+    """The default single statistic is still a single MEAN parcellation.
+
+    It is named ``parcellate_data_mean`` now that the node fans out, and the
+    outputnode gains ``out_mean`` -- but ``out`` still carries it, so role wiring
+    into functional_connectivity is unaffected.
+    """
+    wf = init_parcellate_timeseries_wf(
+        _cifti_timeseries_node(), context=_cifti_timeseries_context()
+    )
     names = set(wf.list_node_names())
-    assert 'parcellate_data' in names
-    assert not any(n.startswith('parcellate_data_') for n in names)
-    assert _identity_fields(wf, 'outputnode') == {'out', 'coverage'}
+    assert 'parcellate_data_mean' in names
+    assert [n for n in names if n.startswith('parcellate_data_')] == ['parcellate_data_mean']
+    assert wf.get_node('parcellate_data_mean').inputs.cor_method == 'MEAN'
+    assert _identity_fields(wf, 'outputnode') == {'out', 'coverage', 'out_mean'}
+
+
+def test_parcellate_timeseries_cifti_has_no_tidy_table():
+    """A wide table cannot hold statistics as columns, so no PscalarsToTidyTsv here.
+
+    parcellate_scalar merges into one tidy table; parcellate_timeseries emits a
+    separate ptseries (and TSV) per statistic instead.  Building the merger here
+    would silently collapse the time axis.
+    """
+    wf = init_parcellate_timeseries_wf(
+        _cifti_timeseries_node(statistics=['mean', 'median']),
+        context=_cifti_timeseries_context(),
+    )
+    names = set(wf.list_node_names())
+    assert 'to_tsv' not in names
+    assert 'statistic_list' not in names
+    assert {'parcellate_data_mean', 'parcellate_data_median'} <= names
+    assert wf.get_node('parcellate_data_median').inputs.cor_method == 'MEDIAN'
+    fields = _identity_fields(wf, 'outputnode')
+    assert 'tsv' not in fields
+    assert {'out', 'out_mean', 'out_median', 'coverage'} == fields
 
 
 def test_unsupported_statistic_fails_at_build_time():
-    with pytest.raises(ValueError, match='median'):
-        init_parcellate_scalar_wf(_node(statistics=['median']), context=_cifti_context())
+    with pytest.raises(ValueError, match='mode'):
+        init_parcellate_scalar_wf(_node(statistics=['mode']), context=_cifti_context())
 
 
 def _volumetric_context(tmp_path, ndim=3):
@@ -184,7 +219,11 @@ def test_volumetric_4d_atlas_binarizes_a_thresholded_dseg(tmp_path):
 
 
 def test_volumetric_timeseries_still_uses_nifti_parcellate(tmp_path):
-    """Only the scalar action gains statistics; the timeseries path is unchanged."""
+    """The timeseries path keeps NiftiParcellate; it fans out rather than switching.
+
+    A parcellated *series* stays wide (timepoints x parcels) whatever the statistic,
+    so it must not be routed to the tidy ParcellateScalarStatistics.
+    """
     from bdt.interfaces.connectivity import NiftiParcellate
 
     ctx = _volumetric_context(tmp_path)
@@ -195,4 +234,121 @@ def test_volumetric_timeseries_still_uses_nifti_parcellate(tmp_path):
         desc=None,
     )
     wf = init_parcellate_timeseries_wf(node, context=ctx)
-    assert isinstance(wf.get_node('parcellate').interface, NiftiParcellate)
+    parcellate = wf.get_node('parcellate_mean')
+    assert isinstance(parcellate.interface, NiftiParcellate)
+    assert parcellate.inputs.strategy == 'mean'
+
+
+def test_volumetric_timeseries_fans_out_one_masker_per_statistic(tmp_path):
+    """Each statistic is a separate NiftiParcellate with its own nilearn strategy."""
+    from bdt.interfaces.connectivity import NiftiParcellate
+
+    ctx = _volumetric_context(tmp_path)
+    node = SimpleNamespace(
+        name='parc',
+        inputs={'timeseries': ['load_scalar'], 'atlas': ['load_atlas']},
+        parameters={'statistics': ['median', 'variance']},
+        desc=None,
+    )
+    wf = init_parcellate_timeseries_wf(node, context=ctx)
+
+    for stat in ('median', 'variance'):
+        parcellate = wf.get_node(f'parcellate_{stat}')
+        assert isinstance(parcellate.interface, NiftiParcellate)
+        # SUPPORTED_STATISTICS is nilearn's own vocabulary, passed straight through
+        assert parcellate.inputs.strategy == stat
+    assert 'parcellate_mean' not in set(wf.list_node_names())
+
+    fields = _identity_fields(wf, 'outputnode')
+    assert {'out', 'coverage', 'out_median', 'out_variance'} == fields
+    # ``out`` mirrors the FIRST requested statistic, not an alphabetical or
+    # hardcoded 'mean' one -- 'median' sorts before 'variance', so request order is
+    # verified separately below.
+    edges = {(u.name, d.name): data['connect'] for u, d, data in wf._graph.edges(data=True)}
+    assert ('timeseries', 'out') in edges[('parcellate_median', 'outputnode')]
+    assert ('coverage', 'coverage') in edges[('parcellate_median', 'outputnode')]
+    assert ('timeseries', 'out') not in edges[('parcellate_variance', 'outputnode')]
+
+
+def test_volumetric_timeseries_out_follows_request_order(tmp_path):
+    """Reversing the request moves ``out`` -- so it is not a hardcoded statistic."""
+    ctx = _volumetric_context(tmp_path)
+    node = SimpleNamespace(
+        name='parc',
+        inputs={'timeseries': ['load_scalar'], 'atlas': ['load_atlas']},
+        parameters={'statistics': ['variance', 'median']},
+        desc=None,
+    )
+    wf = init_parcellate_timeseries_wf(node, context=ctx)
+    edges = {(u.name, d.name): data['connect'] for u, d, data in wf._graph.edges(data=True)}
+    assert ('timeseries', 'out') in edges[('parcellate_variance', 'outputnode')]
+    assert ('timeseries', 'out') not in edges[('parcellate_median', 'outputnode')]
+
+
+def test_volumetric_timeseries_4d_atlas_rejects_extra_statistics(tmp_path):
+    """A probabilistic atlas yields a weighted mean only; anything else is an error."""
+    ctx = _volumetric_context(tmp_path, ndim=4)
+    node = SimpleNamespace(
+        name='parc',
+        inputs={'timeseries': ['load_scalar'], 'atlas': ['load_atlas']},
+        parameters={'statistics': ['median']},
+        desc=None,
+    )
+    with pytest.raises(ValueError, match='probabilistic'):
+        init_parcellate_timeseries_wf(node, context=ctx)
+
+
+def _edges(wf):
+    return {(u.name, d.name): data['connect'] for u, d, data in wf._graph.edges(data=True)}
+
+
+def test_weighted_statistics_take_cifti_weights_directly():
+    """The normal path is unchanged: raw data in, vertex mask as -cifti-weights."""
+    wf = init_parcellate_timeseries_wf(
+        _cifti_timeseries_node(statistics=['mean', 'median', 'sum', 'variance']),
+        context=_cifti_timeseries_context(),
+    )
+    edges = _edges(wf)
+    assert 'nan_mask_data' not in set(wf.list_node_names())
+    for stat in ('mean', 'median', 'sum', 'variance'):
+        node = f'parcellate_data_{stat}'
+        assert ('mask_file', 'cifti_weights') in edges[('vertex_mask', node)]
+        assert ('timeseries', 'in_file') in edges[('inputnode', node)]
+
+
+def test_min_and_max_are_nan_masked_instead_of_weighted():
+    """Workbench refuses -cifti-weights for MIN/MAX.
+
+    Dropping the weights alone would be a silent wrong answer -- an uncovered
+    vertex is *zero*, so it would win every minimum.  The data is NaN-masked first
+    and ``-only-numeric`` (always on) does the excluding.
+    """
+    from bdt.interfaces.cifti import CiftiMask
+
+    wf = init_parcellate_timeseries_wf(
+        _cifti_timeseries_node(statistics=['minimum', 'maximum']),
+        context=_cifti_timeseries_context(),
+    )
+    edges = _edges(wf)
+
+    assert isinstance(wf.get_node('nan_mask_data').interface, CiftiMask)
+    assert ('mask_file', 'mask') in edges[('vertex_mask', 'nan_mask_data')]
+    for stat in ('minimum', 'maximum'):
+        node = f'parcellate_data_{stat}'
+        # fed the NaN-masked series, never the raw one, and never weighted
+        assert ('out_file', 'in_file') in edges[('nan_mask_data', node)]
+        assert ('inputnode', node) not in edges
+        assert ('vertex_mask', node) not in edges
+        assert wf.get_node(node).inputs.only_numeric is True
+
+
+def test_the_nan_masked_series_is_built_once_for_both():
+    """MIN and MAX share one masking node rather than each rebuilding it."""
+    wf = init_parcellate_timeseries_wf(
+        _cifti_timeseries_node(statistics=['minimum', 'maximum', 'mean']),
+        context=_cifti_timeseries_context(),
+    )
+    names = wf.list_node_names()
+    assert len([n for n in names if n.startswith('nan_mask')]) == 1
+    # ...and the weighted statistic in the same request still gets the raw data
+    assert ('timeseries', 'in_file') in _edges(wf)[('inputnode', 'parcellate_data_mean')]

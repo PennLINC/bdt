@@ -23,12 +23,12 @@ def _atlas(tmp_path, ndim, name='tpl-MNI152NLin6Asym_atlas-Y_dseg.nii.gz'):
     return str(path)
 
 
-def _mask(tmp_path, space):
+def _mask(tmp_path, space, basename=None):
     """A real on-disk brain mask, for the discovery `_discover_brain_mask` now runs."""
     import nibabel as nb
     import numpy as np
 
-    path = tmp_path / f'sub-01_space-{space}_desc-brain_mask.nii.gz'
+    path = tmp_path / (basename or f'sub-01_space-{space}_desc-brain_mask.nii.gz')
     nb.Nifti1Image(np.ones((4, 4, 4), 'uint8'), np.eye(4)).to_filename(path)
     return str(path)
 
@@ -76,7 +76,7 @@ def test_volumetric_timeseries_same_space_builds_parcellate_no_warp(tmp_path):
         },
     )
     names = set(init_parcellate_timeseries_wf(node, context=ctx).list_node_names())
-    assert 'parcellate' in names
+    assert 'parcellate_mean' in names
     assert 'warp_atlas' not in names
 
 
@@ -128,8 +128,13 @@ def test_nifti_parcellate_yml_compiles_end_to_end(tmp_path):
     spec = load_spec('scripts/nifti_parcellate.yml')
 
     bold_path = '/data/sub-01_space-MNI152NLin6Asym_desc-preproc_bold.nii.gz'
+    cbf_path = '/data/sub-01_space-MNI152NLin6Asym_cbf.nii.gz'
     atlas_path = _atlas(
         tmp_path, 3, 'tpl-MNI152NLin2009cAsym_atlas-4S456Parcels_res-01_dseg.nii.gz'
+    )
+    # a 4D probabilistic atlas, so the probseg branch is exercised alongside the dseg one
+    difumo_path = _atlas(
+        tmp_path, 4, 'tpl-MNI152NLin2009cAsym_atlas-DiFuMo_scale-64dimensions_probseg.nii.gz'
     )
 
     resolved = {
@@ -139,6 +144,26 @@ def test_nifti_parcellate_yml_compiles_end_to_end(tmp_path):
                 'space': 'MNI152NLin6Asym',
                 'desc': 'preproc',
                 'suffix': 'bold',
+                'extension': '.nii.gz',
+                'datatype': 'func',
+            },
+        ),
+        'load_cbf': _match(
+            cbf_path,
+            {
+                'space': 'MNI152NLin6Asym',
+                'suffix': 'cbf',
+                'extension': '.nii.gz',
+                'datatype': 'perf',
+            },
+        ),
+        'atlas_difumo': _match(
+            difumo_path,
+            {
+                'template': 'MNI152NLin2009cAsym',
+                'atlas': 'DiFuMo',
+                'scale': '64dimensions',
+                'suffix': 'probseg',
                 'extension': '.nii.gz',
             },
         ),
@@ -161,10 +186,27 @@ def test_nifti_parcellate_yml_compiles_end_to_end(tmp_path):
             'fmriprep': [
                 _match(
                     _mask(tmp_path, 'MNI152NLin6Asym'),
-                    {'suffix': 'mask', 'desc': 'brain', 'space': 'MNI152NLin6Asym'},
+                    {
+                        'suffix': 'mask',
+                        'desc': 'brain',
+                        'space': 'MNI152NLin6Asym',
+                        'datatype': 'func',
+                    },
                 )
             ],
             'atlases': [],
+            # parcellate_cbf's brain mask lives beside the CBF in aslprep's tree
+            'aslprep': [
+                _match(
+                    _mask(tmp_path, 'MNI152NLin6Asym', 'perf_mask.nii.gz'),
+                    {
+                        'suffix': 'mask',
+                        'desc': 'brain',
+                        'space': 'MNI152NLin6Asym',
+                        'datatype': 'perf',
+                    },
+                )
+            ],
         }
     )
     context = FactoryContext(
@@ -172,9 +214,14 @@ def test_nifti_parcellate_yml_compiles_end_to_end(tmp_path):
         resolved=resolved,
         provider=provider,
         subject='01',
-        datasets=['fmriprep', 'atlases'],
+        datasets=['fmriprep', 'atlases', 'aslprep'],
     )
-    selections = {'load_bold': bold_path, 'atlas_4s456': atlas_path}
+    selections = {
+        'load_bold': bold_path,
+        'load_cbf': cbf_path,
+        'atlas_4s456': atlas_path,
+        'atlas_difumo': difumo_path,
+    }
 
     wf = init_bdt_wf(spec, selections, context=context)
 
@@ -184,23 +231,70 @@ def test_nifti_parcellate_yml_compiles_end_to_end(tmp_path):
         return any(n.endswith(suffix) for n in names)
 
     # volumetric nodes present
-    assert has_suffix('parcellate_bold.parcellate'), names
-    assert has_suffix('parcellate_bold.warp_atlas'), names
-    assert has_suffix('fc_bold.correlate'), names
+    assert has_suffix('parcellate_bold_4s456.parcellate_mean'), names
+    assert has_suffix('parcellate_bold_4s456.warp_atlas'), names
+    assert has_suffix('fc_bold_4s456.correlate'), names
     # CIFTI-path nodes absent: the volumetric branch also builds a node named
     # 'correlate' (XCP-D's TSVConnect), so matching on that name alone no longer
     # proves the CIFTI path was skipped. Assert the interface type instead.
     from bdt.interfaces.connectivity import NiftiParcellate, TSVConnect
 
-    correlate_node = wf.get_node(next(n for n in names if n.endswith('fc_bold.correlate')))
+    correlate_node = wf.get_node(next(n for n in names if n.endswith('fc_bold_4s456.correlate')))
     assert isinstance(correlate_node.interface, TSVConnect), correlate_node.interface
     # the 3D dseg atlas must route through the XCP-D masker port, not the deleted
     # hand-rolled parcellator.
     parcellate_node = wf.get_node(
-        next(n for n in names if n.endswith('parcellate_bold.parcellate'))
+        next(n for n in names if n.endswith('parcellate_bold_4s456.parcellate_mean'))
     )
     assert isinstance(parcellate_node.interface, NiftiParcellate), parcellate_node.interface
-    assert not has_suffix('parcellate_bold.vertex_mask'), names
-    assert not has_suffix('parcellate_bold.restrict_atlas'), names
+    assert not has_suffix('parcellate_bold_4s456.vertex_mask'), names
+    assert not has_suffix('parcellate_bold_4s456.restrict_atlas'), names
     # no ACPC bridge (neither space is ACPC)
-    assert not has_suffix('parcellate_bold.register_acpc'), names
+    assert not has_suffix('parcellate_bold_4s456.register_acpc'), names
+
+    # every statistic in the YAML becomes its own masker, with nilearn's own name
+    statistics = spec.by_name()['parcellate_bold_4s456'].parameters['statistics']
+    assert len(statistics) == 7, 'fixture should exercise the full vocabulary'
+    for stat in statistics:
+        node_name = next(n for n in names if n.endswith(f'parcellate_bold_4s456.parcellate_{stat}'))
+        assert wf.get_node(node_name).inputs.strategy == stat
+    # ...while parcellate_scalar merges them into ONE tidy node instead
+    assert has_suffix('parcellate_cbf_4s456.parcellate'), names
+    scalar_node = wf.get_node(next(n for n in names if n.endswith('parcellate_cbf_4s456.parcellate')))
+    assert list(scalar_node.inputs.statistics) == statistics
+
+    # and the sink plan reflects the asymmetry: 7 wide timeseries tables vs 1 tidy one
+    from bdt.outputs.plan import build_sink_plan
+
+    plan = build_sink_plan(spec, resolved, roots={'fmriprep': '/data', 'atlases': str(tmp_path)})
+    from bdt.utils.statistics import normalize_statistic
+
+    timeseries = [p for p in plan['parcellate_bold_4s456'] if p.suffix == 'timeseries']
+    # entity values are alphanumeric, so standard_deviation -> standarddeviation
+    assert [p.entities['statistic'] for p in timeseries] == [
+        normalize_statistic(s) for s in statistics
+    ]
+    assert 'standarddeviation' in {p.entities['statistic'] for p in timeseries}
+    tables = [p for p in plan['parcellate_cbf_4s456'] if p.extension == '.tsv' and p.suffix == 'cbf']
+    assert len(tables) == 1, tables
+    assert 'statistic' not in tables[0].entities
+
+    # ---- the probabilistic (4D) atlas takes the weighted branch instead --------
+    from bdt.interfaces.probseg import ProbSegParcellate
+
+    probseg_node = wf.get_node(
+        next(n for n in names if n.endswith('parcellate_bold_difumo.parcellate'))
+    )
+    assert isinstance(probseg_node.interface, ProbSegParcellate), probseg_node.interface
+    # ONE node computing every statistic (the weighting work is shared), fanned out
+    # by pick_<stat> -- unlike the dseg branch's one masker per statistic.
+    assert list(probseg_node.inputs.statistics) == ['mean', 'standard_deviation']
+    assert has_suffix('parcellate_bold_difumo.pick_mean'), names
+    assert has_suffix('parcellate_bold_difumo.pick_standard_deviation'), names
+    assert not has_suffix('parcellate_bold_difumo.parcellate_mean'), names
+
+    # a probabilistic atlas rejects the statistics that have no weighted definition
+    difumo = spec.by_name()['parcellate_bold_difumo']
+    difumo.parameters['statistics'] = ['mean', 'median']
+    with pytest.raises(ValueError, match='probabilistic'):
+        init_bdt_wf(spec, selections, context=context)

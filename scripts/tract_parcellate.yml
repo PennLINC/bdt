@@ -44,7 +44,9 @@ nodes:
     scalar: load_cbf
     atlas: bundle_rois  # warps ROI dseg -> CBF space
   parameters:
-    statistics: [mean, standard_deviation]
+    statistics:
+      - mean
+      - standard_deviation
   write_outputs: true
 - name: cbf_profile
   action: parcellate_scalar_as_tract_profile
@@ -53,6 +55,7 @@ nodes:
     bundles: load_bundles
   parameters:
     n_nodes: 100
+    # XXX: parcellate_scalar_as_tract_profile does not accept "statistics" parameter.
   write_outputs: true
 
 # FA (QSIRecon tensor) — same two summaries
@@ -70,6 +73,10 @@ nodes:
   inputs:
     scalar: load_fa
     atlas: bundle_rois
+  parameters:
+    statistics:
+      - mean
+      - standard_deviation
   write_outputs: true
 - name: fa_profile
   action: parcellate_scalar_as_tract_profile
@@ -78,4 +85,5 @@ nodes:
     bundles: load_bundles
   parameters:
     n_nodes: 100
+    # XXX: parcellate_scalar_as_tract_profile does not accept "statistics" parameter.
   write_outputs: true

@@ -223,9 +223,27 @@ def _produces_cifti(spec: Spec, resolved: dict[str, Match]) -> dict[str, bool]:
             if out is not None and out.output_is_cifti:
                 # dense CIFTI produced from a (per-hemi GIFTI) input regardless of format
                 flag[node.name] = True
+            elif _has_probabilistic_atlas(node, resolved):
+                # A probabilistic atlas has no crisp per-parcel membership, so there is
+                # no honest ParcelsAxis and the node writes tables instead.  This is the
+                # one place a CIFTI input does NOT yield a CIFTI product, and saying so
+                # here is what keeps everything downstream consistent: the plan drops the
+                # native product, and functional_connectivity correlates the TSV rather
+                # than handing a .tsv to wb_command -cifti-correlation.
+                flag[node.name] = False
             else:
                 flag[node.name] = flag.get(_primary_upstream(node), False)
     return flag
+
+
+def _has_probabilistic_atlas(node: Node, resolved: dict[str, Match]) -> bool:
+    """Whether ``node`` is parcellated by a *probabilistic* CIFTI (dscalar) atlas."""
+    from bdt.utils.cifti import is_cifti_probseg
+
+    return any(
+        (match := resolved.get(up)) is not None and is_cifti_probseg(match.path)
+        for up in node.inputs.get('atlas', [])
+    )
 
 
 def _selection_leaves(node: Node, by_name: dict[str, Node]) -> list[str]:
@@ -310,60 +328,78 @@ def build_sink_plan(
         products: list[OutputProduct] = []
         common = {'datatype': datatype, 'scope': node.scope}
 
-        if cifti_by_node.get(node.name) and cifti_suffix and out.cifti_extension:
-            # One native CIFTI per statistic: a parcellated CIFTI holds a single
-            # value per parcel, so several statistics need several files.  Actions
-            # that do not accept ``statistics`` keep exactly one product.
-            if 'statistics' in aspec.parameters:
-                requested = parse_statistics(node.parameters)
-            else:
-                requested = []
-            if requested:
-                source_statistic = mid.get('statistic')
-                for stat in requested:
-                    stat_ent = dict(mid)
-                    stat_ent['statistic'] = compose_statistic_entity(source_statistic, stat)
+        # A file that holds one value per parcel — a parcellated CIFTI, or a wide
+        # (timepoints x parcels) TSV — can only carry a single statistic, so N
+        # statistics mean N files distinguished by ``stat-``.  Actions that do not
+        # accept ``statistics`` keep exactly one product.  ``tsv_source_field`` marks
+        # the exception: that action already merged every statistic into one tidy
+        # table inside its sub-workflow, so its table is *not* multiplied.
+        requested = (
+            parse_statistics(node.parameters) if 'statistics' in aspec.parameters else []
+        )
+        merges_statistics = bool(out.tsv_source_field)
+        source_statistic = mid.get('statistic')
+
+        def _per_statistic(suffix, extension, derive=PASSTHROUGH, field='out'):
+            """One product per requested statistic, or a single unlabelled one."""
+            if not requested:
+                return [
+                    OutputProduct(
+                        derive=derive,
+                        suffix=suffix,
+                        extension=extension,
+                        entities=dict(mid),
+                        sidecar=dict(sidecar),
+                        source_field=field,
+                        **common,
+                    )
+                ]
+            out_products = []
+            for stat in requested:
+                stat_ent = dict(mid)
+                stat_ent['statistic'] = compose_statistic_entity(source_statistic, stat)
+                out_products.append(
+                    OutputProduct(
+                        derive=derive,
+                        suffix=suffix,
+                        extension=extension,
+                        entities=stat_ent,
+                        sidecar=dict(sidecar),
+                        source_field=f'{field}_{stat}',
+                        **common,
+                    )
+                )
+            return out_products
+
+        # ``_produces_cifti`` already answers False for a probabilistic-atlas node,
+        # so this covers both "the data was volumetric" and "the atlas was a probseg".
+        native_cifti = bool(cifti_by_node.get(node.name))
+        if native_cifti and cifti_suffix and out.cifti_extension:
+            products.extend(_per_statistic(cifti_suffix, out.cifti_extension))
+            # ... plus a flattened TSV for tabular (parcellated) outputs, but not for
+            # a dense CIFTI (a resampled/mapped surface scalar has no table form).
+            if out.emit_tsv:
+                if merges_statistics:
+                    # One tidy table holding every statistic as a column; it keeps the
+                    # source's own ``statistic`` entity and is read straight off the
+                    # sub-workflow rather than converted here.
                     products.append(
                         OutputProduct(
                             derive=PASSTHROUGH,
-                            suffix=cifti_suffix,
-                            extension=out.cifti_extension,
-                            entities=stat_ent,
+                            suffix=tsv_suffix,
+                            extension=out.extension,
+                            entities=dict(mid),
                             sidecar=dict(sidecar),
-                            source_field=f'out_{stat}',
+                            source_field=out.tsv_source_field,
                             **common,
                         )
                     )
-            else:
-                products.append(
-                    OutputProduct(
-                        derive=PASSTHROUGH,
-                        suffix=cifti_suffix,
-                        extension=out.cifti_extension,
-                        entities=dict(mid),
-                        sidecar=dict(sidecar),
-                        **common,
+                else:
+                    products.extend(
+                        _per_statistic(tsv_suffix, out.extension, derive=CIFTI_TO_TSV)
                     )
-                )
-            # ... plus a flattened TSV for tabular (parcellated) outputs, but not for
-            # a dense CIFTI (a resampled/mapped surface scalar has no table form).
-            # The table holds every statistic at once, so it keeps the source's own
-            # ``statistic`` entity and is read straight off the sub-workflow when the
-            # action builds it there.
-            if out.emit_tsv:
-                products.append(
-                    OutputProduct(
-                        derive=PASSTHROUGH if out.tsv_source_field else CIFTI_TO_TSV,
-                        suffix=tsv_suffix,
-                        extension=out.extension,
-                        entities=dict(mid),
-                        sidecar=dict(sidecar),
-                        source_field=out.tsv_source_field or 'out',
-                        **common,
-                    )
-                )
-        else:
-            # Volumetric / already-tabular: the primary product only.
+        elif merges_statistics:
+            # Volumetric, tidy: one table, every statistic a column.
             products.append(
                 OutputProduct(
                     derive=PASSTHROUGH,
@@ -374,10 +410,13 @@ def build_sink_plan(
                     **common,
                 )
             )
+        else:
+            # Volumetric / already-tabular: the primary product, per statistic.
+            products.extend(_per_statistic(primary_suffix, out.extension))
 
         # Secondary products (e.g. the parcel-coverage map) from other outputnode fields.
         for ep in out.extra:
-            is_cifti_node = bool(cifti_by_node.get(node.name))
+            is_cifti_node = native_cifti
             if not is_cifti_node and ep.cifti_only and ep.volumetric_extension is None:
                 continue
             ep_extension = (

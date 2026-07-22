@@ -39,6 +39,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from nipype import logging
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 
@@ -49,8 +50,65 @@ from bdt.interfaces.workbench import (
     CiftiMath,
     CiftiParcellateWorkbench,
 )
+from bdt.utils.statistics import (
+    WEIGHTED_STATISTICS,
+    WORKBENCH_METHOD,
+    WORKBENCH_UNWEIGHTED,
+    parse_statistics,
+)
+
+LOGGER = logging.getLogger('nipype.workflow')
 
 WORKFLOW_FACTORIES: dict[str, callable] = {}
+
+#: Entities describing an atlas *realization* rather than the atlas itself, and so
+#: droppable when looking for its labels sidecar.  AtlasPack ships one TSV per
+#: atlas but one image per density/resolution, e.g.
+#: ``tpl-fsLR_atlas-DiFuMo_scale-64dimensions_den-91k_probseg.dscalar.nii`` beside
+#: ``tpl-fsLR_atlas-DiFuMo_scale-64dimensions_probseg.tsv``.  Dropped left to right
+#: after the exact stem fails, most specific candidate first.
+_LABEL_SIDECAR_DROPPABLE = ('den', 'res')
+
+_ATLAS_EXTENSIONS = ('.nii.gz', '.dscalar.nii', '.dlabel.nii', '.nii')
+
+
+def _atlas_labels_sidecar(path: str) -> str:
+    """The BIDS labels TSV describing the atlas image at ``path``.
+
+    Tries the exact stem first, then progressively drops
+    :data:`_LABEL_SIDECAR_DROPPABLE` entities -- BIDS inheritance in spirit: one
+    table describes the atlas, while the image exists per density/resolution.
+    Raises naming every path tried, since a wrong guess here would mislabel every
+    parcel in the output.
+    """
+    import itertools
+    import os
+
+    extension = next((e for e in _ATLAS_EXTENSIONS if path.endswith(e)), None)
+    if extension is None:
+        raise ValueError(
+            f'Unrecognized atlas extension (expected one of '
+            f'{", ".join(_ATLAS_EXTENSIONS)}): {path}'
+        )
+    directory, stem = os.path.split(path[: -len(extension)])
+    chunks = stem.split('_')
+
+    tried = []
+    # subsets of the droppable entities, fewest dropped first
+    for count in range(len(_LABEL_SIDECAR_DROPPABLE) + 1):
+        for drop in itertools.combinations(_LABEL_SIDECAR_DROPPABLE, count):
+            kept = [c for c in chunks if c.split('-')[0] not in drop]
+            candidate = os.path.join(directory, '_'.join(kept) + '.tsv')
+            if candidate in tried:
+                continue
+            if os.path.exists(candidate):
+                return candidate
+            tried.append(candidate)
+    raise ValueError(
+        f'Atlas {path} has no labels sidecar. An atlas needs a BIDS TSV '
+        '(index/name) to name its parcels and to detect parcels lost when the atlas '
+        'is warped. Tried, most specific first:\n' + '\n'.join(f'  {t}' for t in tried)
+    )
 
 
 @dataclass
@@ -150,6 +208,23 @@ class FactoryContext:
                 ) from exc
         return None
 
+    def role_atlas_is_probabilistic(self, node, role: str = 'atlas') -> bool:
+        """Whether the CIFTI atlas feeding ``role`` is a dscalar probseg.
+
+        A dlabel carries a ``LabelAxis`` and can go to ``wb_command``; a dscalar
+        carries a ``ScalarAxis``, one map per region, and cannot -- Workbench
+        rejects it with "input cifti label file has the wrong mapping types".
+        Read from the header at *build* time so the wrong graph is never built.
+        """
+        from bdt.utils.cifti import is_cifti_probseg
+
+        for up in node.inputs.get(role, []):
+            match = (self.resolved or {}).get(up)
+            if match is None or not is_cifti_probseg(match.path):
+                return False
+            return True
+        return False
+
     def role_atlas_labels(self, node, role: str = 'atlas') -> str | None:
         """Path to the BIDS ``dseg.tsv`` describing the atlas feeding ``role``.
 
@@ -159,24 +234,11 @@ class FactoryContext:
         sidecar beside it.  For a **processing** atlas this returns ``None`` --
         those labels arrive over a wired ``tsv`` edge instead.
         """
-        import os
-
         for up in node.inputs.get(role, []):
             match = (self.resolved or {}).get(up)
             if match is None:
                 return None
-            path = match.path
-            for ext in ('.nii.gz', '.nii'):
-                if path.endswith(ext):
-                    sidecar = path[: -len(ext)] + '.tsv'
-                    if os.path.exists(sidecar):
-                        return sidecar
-                    raise ValueError(
-                        f'Atlas {path} has no labels sidecar at {sidecar}. '
-                        'A volumetric atlas needs a BIDS dseg.tsv (index/name) to name '
-                        'its parcels and to detect parcels lost when the atlas is warped.'
-                    )
-            raise ValueError(f'Unrecognized atlas extension (expected .nii/.nii.gz): {path}')
+            return _atlas_labels_sidecar(match.path)
         return None
 
     def discover_transforms(self, session: str | None = None) -> list[str]:
@@ -385,7 +447,7 @@ def _io_nodes(input_fields: list[str]) -> tuple[pe.Node, pe.Node]:
 
 
 def _init_parcellate_cifti_wf(
-    node, name, in_role: str, out_file: str, statistics=None
+    node, name, in_role: str, out_file: str, statistics, merge_tsv: bool
 ) -> pe.Workflow:
     """Shared coverage-aware CIFTI parcellation (XCP-D ``init_parcellate_cifti_wf``).
 
@@ -416,30 +478,37 @@ def _init_parcellate_cifti_wf(
        it (``>=``).  Aligning the two would change existing CIFTI outputs, so it has
        not been done; treat coverage values as comparable only within a modality.
 
-    ``statistics``.  ``None`` (the ``parcellate_timeseries`` call) builds exactly
-    today's graph: a single ``parcellate_data``/``mask`` pair and an ``outputnode``
-    with only ``out``/``coverage``.  A list (the ``parcellate_scalar`` call) builds
-    one Workbench parcellation (``parcellate_data_<stat>``) and mask
-    (``mask_<stat>``) per requested statistic — the shared coverage machinery above
-    is built exactly once regardless — plus a :class:`PscalarsToTidyTsv` node
-    merging every statistic into one tidy table on ``outputnode.tsv``.
-    ``outputnode.out`` always mirrors the *first* requested statistic, so a
-    downstream node wired to it by role is unaffected by asking for more.
+    ``statistics`` builds one Workbench parcellation (``parcellate_data_<stat>``)
+    and mask (``mask_<stat>``) per requested statistic — the shared coverage
+    machinery above is built exactly once regardless — exposed on ``outputnode`` as
+    ``out_<stat>``.  ``outputnode.out`` always mirrors the *first* requested
+    statistic, so a downstream node wired to it by role is unaffected by asking for
+    more.
+
+    ``merge_tsv`` says how the statistics reach a table, and the two parcellation
+    actions differ:
+
+    * ``parcellate_scalar`` sets it, and gets a :class:`PscalarsToTidyTsv` node
+      merging every statistic into **one** tidy table on ``outputnode.tsv`` — a
+      parcellated scalar is one row per parcel, so statistics fit as columns.
+    * ``parcellate_timeseries`` does not.  Its table is wide (timepoints x parcels)
+      and has nowhere to put a second statistic, so the sink converts each
+      ``out_<stat>`` ptseries into its own ``stat-``-labelled TSV instead.
     """
     from bdt.interfaces.cifti_stats import PscalarsToTidyTsv
 
     wf = pe.Workflow(name=name or node.name)
     min_coverage = float(node.parameters.get('min_coverage', 0.5))
 
-    # ``statistics=None`` -> the historical single-mean workflow (parcellate_timeseries).
-    # A list -> one Workbench parcellation per statistic plus the merged tidy table.
-    per_statistic = list(statistics) if statistics else None
-    method = {'mean': 'MEAN', 'standard_deviation': 'STDEV'}
+    per_statistic = list(statistics)
+    method = WORKBENCH_METHOD
+    # 'parcellated.ptseries.nii' -> 'parcellated_<stat>.ptseries.nii'
+    stem, _, extension = out_file.partition('.')
 
     inputnode = pe.Node(niu.IdentityInterface(fields=[in_role, 'atlas']), name='inputnode')
-    fields = ['out', 'coverage']
-    if per_statistic:
-        fields += [f'out_{s}' for s in per_statistic] + ['tsv']
+    fields = ['out', 'coverage'] + [f'out_{s}' for s in per_statistic]
+    if merge_tsv:
+        fields.append('tsv')
     outputnode = pe.Node(niu.IdentityInterface(fields=fields), name='outputnode')
 
     # 0. restrict the atlas to the data's brainordinates.  A cortex-only surface
@@ -480,35 +549,52 @@ def _init_parcellate_cifti_wf(
 
     # 3./5. per statistic: coverage-weighted parcellation (uncovered vertices get
     # weight 0), then NaN-out parcels below the coverage threshold
-    for index, stat in enumerate(per_statistic or ['mean']):
-        suffix = f'_{stat}' if per_statistic else ''
+    #
+    # MIN/MAX are the exception: Workbench refuses ``-cifti-weights`` for them
+    # ("weighted reduction not supported for 'MIN' method"), being selections rather
+    # than arithmetic.  Dropping the weights is not enough -- an uncovered vertex is
+    # *zero*, which would then win every minimum -- so the data is NaN-masked first
+    # and ``-only-numeric`` does the excluding instead.  Verified against a numpy
+    # ground truth on real data: identical to the weighted definition.
+    nan_masked = None
+    for index, stat in enumerate(per_statistic):
+        weighted = stat not in WORKBENCH_UNWEIGHTED
         parcellate_data = pe.Node(
             CiftiParcellateWorkbench(
                 direction='COLUMN',
                 only_numeric=True,
-                cor_method=method[stat] if per_statistic else 'MEAN',
-                out_file=out_file if not per_statistic else f'parcellated_{stat}.pscalar.nii',
+                cor_method=method[stat],
+                out_file=f'{stem}_{stat}.{extension}',
             ),
-            name=f'parcellate_data{suffix}',
+            name=f'parcellate_data_{stat}',
         )
-        mask = pe.Node(CiftiMask(), name=f'mask{suffix}')
+        mask = pe.Node(CiftiMask(), name=f'mask_{stat}')
+        if weighted:
+            wf.connect([
+                (inputnode, parcellate_data, [(in_role, 'in_file')]),
+                (vertex_mask, parcellate_data, [('mask_file', 'cifti_weights')]),
+            ])  # fmt:skip
+        else:
+            if nan_masked is None:
+                # built once and shared: the same masked series serves MIN and MAX
+                nan_masked = pe.Node(CiftiMask(), name='nan_mask_data')
+                wf.connect([
+                    (inputnode, nan_masked, [(in_role, 'in_file')]),
+                    (vertex_mask, nan_masked, [('mask_file', 'mask')]),
+                ])  # fmt:skip
+            wf.connect([(nan_masked, parcellate_data, [('out_file', 'in_file')])])
         wf.connect([
-            (inputnode, parcellate_data, [(in_role, 'in_file')]),
             (restrict_atlas, parcellate_data, [('out_file', 'atlas_label')]),
-            (vertex_mask, parcellate_data, [('mask_file', 'cifti_weights')]),
             (parcellate_data, mask, [('out_file', 'in_file')]),
             (threshold, mask, [('out_file', 'mask')]),
+            (mask, outputnode, [('out_file', f'out_{stat}')]),
         ])  # fmt:skip
-        if per_statistic:
-            wf.connect([(mask, outputnode, [('out_file', f'out_{stat}')])])
-            if index == 0:
-                # ``out`` stays the first requested statistic so role wiring into a
-                # downstream node is unchanged by asking for more statistics.
-                wf.connect([(mask, outputnode, [('out_file', 'out')])])
-        else:
+        if index == 0:
+            # ``out`` stays the first requested statistic so role wiring into a
+            # downstream node is unchanged by asking for more statistics.
             wf.connect([(mask, outputnode, [('out_file', 'out')])])
 
-    if per_statistic:
+    if merge_tsv:
         to_tsv = pe.Node(
             PscalarsToTidyTsv(statistics=per_statistic, out_file='parcellated.tsv'),
             name='to_tsv',
@@ -524,6 +610,71 @@ def _init_parcellate_cifti_wf(
     return wf
 
 
+def _init_parcellate_cifti_probseg_wf(
+    node, name, in_role: str, context, statistics, tidy: bool
+) -> pe.Workflow:
+    """Grayordinate parcellation by a *probabilistic* (dscalar) atlas.
+
+    Workbench cannot parcellate by a dscalar, so this path skips it entirely: a
+    :class:`~bdt.interfaces.cifti.CiftiVertexMask` marks the grayordinates that
+    carry data, and :class:`~bdt.interfaces.cifti_probseg.CiftiProbSegParcellate`
+    computes the weighted statistics directly.  It is the grayordinate twin of the
+    volumetric :class:`~bdt.interfaces.probseg.ProbSegParcellate` branch, and uses
+    the same weighted definitions so the two modalities agree.
+
+    There is no native CIFTI output.  A ``ParcelsAxis`` demands crisp per-parcel
+    membership, which a probabilistic atlas does not have -- inventing one (say
+    ``weight > 0``) would put a hard boundary in the file that the values do not
+    respect.  ``outputnode`` therefore exposes tables only, and the sink plan drops
+    the native product for these nodes.
+    """
+    from bdt.interfaces.cifti_probseg import CiftiProbSegParcellate
+
+    wf = pe.Workflow(name=name or node.name)
+    min_coverage = float(node.parameters.get('min_coverage', 0.5))
+
+    fields = ['out', 'coverage'] + [f'out_{s}' for s in statistics]
+    if tidy:
+        fields.append('tsv')
+    inputnode = pe.Node(niu.IdentityInterface(fields=[in_role, 'atlas']), name='inputnode')
+    outputnode = pe.Node(niu.IdentityInterface(fields=fields), name='outputnode')
+
+    vertex_mask = pe.Node(CiftiVertexMask(), name='vertex_mask')
+    parcellate = pe.Node(
+        CiftiProbSegParcellate(
+            statistics=statistics,
+            tidy=tidy,
+            min_coverage=min_coverage,
+            atlas_labels=context.role_atlas_labels(node, 'atlas'),
+        ),
+        name='parcellate',
+    )
+    wf.connect([
+        (inputnode, vertex_mask, [(in_role, 'in_file')]),
+        (inputnode, parcellate, [(in_role, 'data'), ('atlas', 'atlas')]),
+        (vertex_mask, parcellate, [('mask_file', 'vertex_mask')]),
+        (parcellate, outputnode, [('coverage', 'coverage')]),
+    ])  # fmt:skip
+
+    if tidy:
+        wf.connect([(parcellate, outputnode, [('tsv', 'tsv'), ('tsv', 'out')])])
+        return wf
+
+    # ``out_files`` is one table per statistic in request order; split it so each
+    # lands on its own outputnode field, as the dlabel path's per-statistic nodes do.
+    for index, stat in enumerate(statistics):
+        pick = pe.Node(
+            niu.Select(index=index), name=f'pick_{stat}'
+        )
+        wf.connect([
+            (parcellate, pick, [('out_files', 'inlist')]),
+            (pick, outputnode, [('out', f'out_{stat}')]),
+        ])  # fmt:skip
+        if index == 0:
+            wf.connect([(pick, outputnode, [('out', 'out')])])
+    return wf
+
+
 @workflow_factory('parcellate_timeseries')
 def init_parcellate_timeseries_wf(node, name=None, context=None) -> pe.Workflow:
     """Parcellate a dense series with a dlabel/label atlas, coverage-aware.
@@ -534,7 +685,19 @@ def init_parcellate_timeseries_wf(node, name=None, context=None) -> pe.Workflow:
     """
     context = context or FactoryContext()
     if context.role_is_cifti(node, 'timeseries'):
-        return _init_parcellate_cifti_wf(node, name, 'timeseries', 'parcellated.ptseries.nii')
+        statistics = parse_statistics(node.parameters)
+        if context.role_atlas_is_probabilistic(node, 'atlas'):
+            return _init_parcellate_cifti_probseg_wf(
+                node, name, 'timeseries', context, statistics, tidy=False
+            )
+        return _init_parcellate_cifti_wf(
+            node,
+            name,
+            'timeseries',
+            'parcellated.ptseries.nii',
+            statistics=statistics,
+            merge_tsv=False,
+        )
     return _init_parcellate_volumetric_wf(node, name, context, 'timeseries')
 
 
@@ -549,14 +712,18 @@ def init_parcellate_scalar_wf(node, name=None, context=None) -> pe.Workflow:
     """
     context = context or FactoryContext()
     if context.role_is_cifti(node, 'scalar'):
-        from bdt.utils.statistics import parse_statistics
-
+        statistics = parse_statistics(node.parameters)
+        if context.role_atlas_is_probabilistic(node, 'atlas'):
+            return _init_parcellate_cifti_probseg_wf(
+                node, name, 'scalar', context, statistics, tidy=True
+            )
         return _init_parcellate_cifti_wf(
             node,
             name,
             'scalar',
             'parcellated.pscalar.nii',
-            statistics=parse_statistics(node.parameters),
+            statistics=statistics,
+            merge_tsv=True,
         )
     return _init_parcellate_volumetric_wf(node, name, context, 'scalar')
 
@@ -754,8 +921,18 @@ def _init_parcellate_volumetric_wf(node, name, context, data_role: str) -> pe.Wo
     3D integer-label atlas -> XCP-D's :class:`NiftiParcellate` (``NiftiLabelsMasker``).
     4D atlas (one volume per region, possibly overlapping) ->
     :class:`~bdt.interfaces.probseg.ProbSegParcellate`, binarized when the atlas is a
-    thresholded ``dseg``.  ``outputnode`` exposes ``out`` (the wide TSV; a scalar is
-    the one-row case) and ``coverage``.
+    thresholded ``dseg``.  ``outputnode`` exposes ``out`` and ``coverage``.
+
+    The two data roles report statistics differently, because their tables have
+    different shapes:
+
+    * ``scalar`` -> one :class:`ParcellateScalarStatistics` node producing a single
+      tidy table (a row per parcel, a column per statistic) on ``out``.
+    * ``timeseries`` -> the table is wide (timepoints x parcels) with no room for a
+      second statistic, so one ``parcellate_<stat>`` node per requested statistic,
+      each on ``out_<stat>``.  ``out`` mirrors the first requested statistic, and
+      ``coverage`` is taken from that same node — coverage depends only on the atlas
+      and the brain mask, so every node computes the identical map.
     """
     from bdt.interfaces.connectivity import NiftiParcellate
     from bdt.interfaces.parcellate_stats import ParcellateScalarStatistics
@@ -763,6 +940,7 @@ def _init_parcellate_volumetric_wf(node, name, context, data_role: str) -> pe.Wo
 
     wf = pe.Workflow(name=name or node.name)
     min_coverage = float(node.parameters.get('min_coverage', 0.5))
+    statistics = parse_statistics(node.parameters)
 
     fields = [data_role, 'atlas']
     labels_path = context.role_atlas_labels(node, 'atlas')
@@ -770,7 +948,6 @@ def _init_parcellate_volumetric_wf(node, name, context, data_role: str) -> pe.Wo
         # processing-node atlas: labels arrive over the secondary edge (workflow.py)
         fields.append('atlas_labels')
     inputnode = pe.Node(niu.IdentityInterface(fields=fields), name='inputnode')
-    outputnode = pe.Node(niu.IdentityInterface(fields=['out', 'coverage']), name='outputnode')
 
     ndim = context.role_atlas_ndim(node, 'atlas')
     mask = _discover_brain_mask(context, node, data_role)
@@ -779,47 +956,123 @@ def _init_parcellate_volumetric_wf(node, name, context, data_role: str) -> pe.Wo
     if data_role == 'scalar':
         # A parcellated scalar is reported tidily, one row per parcel and one column
         # per statistic, for both atlas forms.
-        from bdt.utils.statistics import parse_statistics
-
-        parcellate = pe.Node(
-            ParcellateScalarStatistics(
-                mask=mask,
-                min_coverage=min_coverage,
-                statistics=parse_statistics(node.parameters),
-                binarize=ndim != 3 and atlas_suffix == 'dseg',
-            ),
-            name='parcellate',
-        )
-        data_field = 'scalar'
+        built = [
+            (
+                'parcellate',
+                ParcellateScalarStatistics(
+                    mask=mask,
+                    min_coverage=min_coverage,
+                    statistics=statistics,
+                    binarize=ndim != 3 and atlas_suffix == 'dseg',
+                ),
+                'scalar',
+                'out_file',
+                'out',
+            )
+        ]
     elif ndim == 3:
-        parcellate = pe.Node(
-            NiftiParcellate(mask=mask, min_coverage=min_coverage), name='parcellate'
-        )
-        data_field = 'filtered_file'
+        built = [
+            (
+                f'parcellate_{stat}',
+                NiftiParcellate(mask=mask, min_coverage=min_coverage, strategy=stat),
+                'filtered_file',
+                'timeseries',
+                f'out_{stat}',
+            )
+            for stat in statistics
+        ]
     else:
-        parcellate = pe.Node(
-            ProbSegParcellate(
-                mask=mask,
-                min_coverage=min_coverage,
-                binarize=atlas_suffix == 'dseg',
-            ),
-            name='parcellate',
-        )
-        data_field = 'data'
+        undefined = [s for s in statistics if s not in WEIGHTED_STATISTICS]
+        if undefined:
+            raise ValueError(
+                f'Node {node.name!r}: the atlas on role {"atlas"!r} is 4D '
+                f'(probabilistic), and a weighted time series is only defined for '
+                f'{", ".join(WEIGHTED_STATISTICS)}, but {", ".join(undefined)} was '
+                f'requested. Supply a 3D label atlas (or a thresholded dseg) to use '
+                f'the other statistics.'
+            )
+        # One node computing every statistic (they share the weighting work), fanned
+        # out below -- unlike the 3D branch, where each statistic is its own masker.
+        built = [
+            (
+                'parcellate',
+                ProbSegParcellate(
+                    mask=mask,
+                    min_coverage=min_coverage,
+                    binarize=atlas_suffix == 'dseg',
+                    statistics=statistics,
+                ),
+                'data',
+                None,  # fanned out from `out_files`
+                None,
+            )
+        ]
 
-    if labels_path is not None:
-        parcellate.inputs.atlas_labels = labels_path
-    else:
-        wf.connect([(inputnode, parcellate, [('atlas_labels', 'atlas_labels')])])
-
+    fan_out = built[0][3] is None  # one node emitting `out_files`, split below
+    fields = ['out', 'coverage']
+    fields += [f'out_{s}' for s in statistics] if fan_out else [
+        f[4] for f in built if f[4] != 'out'
+    ]
+    outputnode = pe.Node(niu.IdentityInterface(fields=fields), name='outputnode')
     atlas_node, atlas_field = _warp_atlas_field(wf, node, context, inputnode, data_role)
-    primary_field = 'out_file' if data_role == 'scalar' else 'timeseries'
-    wf.connect([
-        (inputnode, parcellate, [(data_role, data_field)]),
-        (atlas_node, parcellate, [(atlas_field, 'atlas')]),
-        (parcellate, outputnode, [(primary_field, 'out'), ('coverage', 'coverage')]),
-    ])  # fmt:skip
+
+    for index, (node_name, interface, data_field, primary_field, out_field) in enumerate(built):
+        parcellate = pe.Node(interface, name=node_name)
+        if labels_path is not None:
+            parcellate.inputs.atlas_labels = labels_path
+        else:
+            wf.connect([(inputnode, parcellate, [('atlas_labels', 'atlas_labels')])])
+        wf.connect([
+            (inputnode, parcellate, [(data_role, data_field)]),
+            (atlas_node, parcellate, [(atlas_field, 'atlas')]),
+        ])  # fmt:skip
+        if primary_field is not None:
+            wf.connect([(parcellate, outputnode, [(primary_field, out_field)])])
+        if index == 0:
+            # Coverage is atlas x brain-mask only, identical across statistics, so
+            # take it (and ``out``) from the first requested one.
+            wf.connect([(parcellate, outputnode, [('coverage', 'coverage')])])
+            if primary_field is not None and out_field != 'out':
+                wf.connect([(parcellate, outputnode, [(primary_field, 'out')])])
+
+    if fan_out:
+        parcellate = wf.get_node(built[0][0])
+        for index, stat in enumerate(statistics):
+            pick = pe.Node(niu.Select(index=index), name=f'pick_{stat}')
+            wf.connect([
+                (parcellate, pick, [('out_files', 'inlist')]),
+                (pick, outputnode, [('out', f'out_{stat}')]),
+            ])  # fmt:skip
+            if index == 0:
+                wf.connect([(pick, outputnode, [('out', 'out')])])
     return wf
+
+
+def _warn_connectivity_statistic(node, context) -> None:
+    """Say which statistic feeds the correlation when the upstream computed several.
+
+    Role wiring carries ``outputnode.out``, which a multi-statistic
+    ``parcellate_timeseries`` defines as the *first* requested statistic.  That makes
+    the connectivity matrix depend on the order of a YAML list, which is easy to
+    miss, so it is stated explicitly at build time.
+    """
+    if context is None or context.spec is None:
+        return
+    by_name = context.spec.by_name()
+    for up_name in node.inputs.get('timeseries', []):
+        up = by_name.get(up_name)
+        if up is None or up.action != 'parcellate_timeseries':
+            continue
+        statistics = parse_statistics(up.parameters)
+        if len(statistics) > 1:
+            LOGGER.warning(
+                "Node %r: %r computes %s; connectivity is correlated from %r, the "
+                'first requested. Reorder the `statistics` list to change it.',
+                node.name,
+                up_name,
+                ', '.join(statistics),
+                statistics[0],
+            )
 
 
 @workflow_factory('functional_connectivity')
@@ -829,9 +1082,15 @@ def init_functional_connectivity_wf(node, name=None, context=None) -> pe.Workflo
     CIFTI ptseries -> :class:`CiftiCorrelation` -> pconn; a volumetric parcellated
     TSV -> XCP-D's :class:`~bdt.interfaces.connectivity.TSVConnect` -> a relmat TSV
     with ``Node`` row labels.
+
+    When the upstream ``parcellate_timeseries`` computed several statistics it wires
+    only ``outputnode.out`` here — the *first* requested one — so the connectivity
+    matrix is built from that single series.  This is announced rather than assumed,
+    since the choice comes from the order of a YAML list.
     """
     context = context or FactoryContext()
     wf = pe.Workflow(name=name or node.name)
+    _warn_connectivity_statistic(node, context)
     inputnode, outputnode = _io_nodes(['timeseries'])
 
     if context.role_is_cifti(node, 'timeseries'):

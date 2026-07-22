@@ -44,12 +44,10 @@ from nipype.interfaces.base import (
     traits,
 )
 
-from bdt.utils.statistics import SUPPORTED_STATISTICS
+from bdt.utils.images import as_float_img
+from bdt.utils.statistics import SUPPORTED_STATISTICS, WEIGHTED_STATISTICS
 
 LOGGER = logging.getLogger('nipype.interface')
-
-#: statistic -> nilearn ``NiftiLabelsMasker`` strategy, for a 3D label atlas.
-_NILEARN_STRATEGY = {'mean': 'mean', 'standard_deviation': 'standard_deviation'}
 
 
 class _ParcellateScalarStatisticsInputSpec(BaseInterfaceInputSpec):
@@ -195,18 +193,31 @@ class ParcellateScalarStatistics(SimpleInterface):
                 lut=lut,
                 background_label=0,
                 mask_img=self.inputs.mask,
-                strategy=_NILEARN_STRATEGY[stat],
+                strategy=stat,  # SUPPORTED_STATISTICS is nilearn's own vocabulary
                 resampling_target=None,
                 keep_masked_labels=True,
                 standardize=None,
             )
             column = np.full(n_nodes, np.nan, dtype='float64')
-            column[positions] = np.atleast_1d(np.squeeze(masker.fit_transform(self.inputs.scalar)))
+            column[positions] = np.atleast_1d(
+                # as_float_img: nilearn reduces in the input dtype, so an integer
+                # scalar would truncate every statistic and wrap ``sum`` outright.
+                np.squeeze(masker.fit_transform(as_float_img(self.inputs.scalar)))
+            )
             values[stat] = column
         return names, values, coverage
 
     def _weighted_atlas(self, labels_df, atlas_img, statistics):
         """4D per-region atlas -> mask-restricted weighted statistics."""
+        undefined = [s for s in statistics if s not in WEIGHTED_STATISTICS]
+        if undefined:
+            raise ValueError(
+                f'Atlas {self.inputs.atlas} is 4D (probabilistic), where only '
+                f'{", ".join(WEIGHTED_STATISTICS)} have a weighted definition, but '
+                f'{", ".join(undefined)} was requested. Either request only the '
+                f'weighted statistics or supply a 3D label atlas.'
+            )
+
         n_parcels = atlas_img.shape[3]
         names = labels_df['name'].astype(str).tolist()
         if len(names) != n_parcels:

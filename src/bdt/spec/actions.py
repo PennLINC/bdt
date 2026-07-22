@@ -281,7 +281,7 @@ _ACTIONS: tuple[ActionSpec, ...] = (
         PROCESSING,
         'parcellated_timeseries',
         roles=(_r('timeseries', 'timeseries'), _r('atlas', 'atlas')),
-        parameters=frozenset({'min_coverage'}),
+        parameters=frozenset({'min_coverage', 'statistics'}),
         out=_o(
             'timeseries',
             '.tsv',
@@ -299,7 +299,9 @@ _ACTIONS: tuple[ActionSpec, ...] = (
                     stat='coverage',
                 ),
             ),
-            statistic='mean',
+            # No static ``statistic='mean'``: the parcellation statistic is now the
+            # ``statistics`` parameter, and the plan stamps ``stat-`` per requested
+            # one.  The default ['mean'] reproduces the old ``stat-mean`` exactly.
         ),
     ),
     ActionSpec(

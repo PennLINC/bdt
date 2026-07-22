@@ -186,8 +186,8 @@ def test_pseg_binarize_matches_the_plain_masked_statistics(tmp_path, monkeypatch
 def test_unsupported_statistic_is_rejected(tmp_path, monkeypatch):
     _dseg_fixture(tmp_path)
     monkeypatch.chdir(tmp_path)
-    with pytest.raises(ValueError, match='median'):
-        _run(tmp_path, statistics=['median'])
+    with pytest.raises(ValueError, match='mode'):
+        _run(tmp_path, statistics=['mode'])
 
 
 def test_label_count_must_match_a_4d_atlas(tmp_path, monkeypatch):

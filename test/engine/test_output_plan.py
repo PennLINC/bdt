@@ -87,9 +87,12 @@ def test_node_output_entities_injects_atlas_and_stat():
     ent = node_output_entities(spec, resolved)
 
     parc = ent['parcellate_bold']
-    # atlas injected from the wired atlas role; action's fixed stat added
+    # atlas injected from the wired atlas role
     assert parc['atlas'] == '4S1056Parcels'
-    assert parc['statistic'] == 'mean'
+    # The parcellation statistic is now per-product (one file per requested
+    # statistic), not a fixed node-level entity, so it is absent here and stamped
+    # in build_sink_plan -- see test_parcellate_timeseries_default_is_still_stat_mean.
+    assert 'statistic' not in parc
     # source geometry entities carried through
     assert parc['space'] == 'fsLR'
     assert parc['den'] == '91k'
@@ -355,9 +358,12 @@ def test_volumetric_parcellate_timeseries_emits_tsv_coverage():
 
     parc = plan['parcellate_bold']
     assert [(p.suffix, p.extension, p.source_field) for p in parc] == [
-        ('timeseries', '.tsv', 'out'),
+        ('timeseries', '.tsv', 'out_mean'),
         ('boldmap', '.tsv', 'coverage'),
     ]
+    # The default single statistic still produces exactly one table, named stat-mean
+    # as it always was -- the multiplication is invisible until more are requested.
+    assert parc[0].entities['statistic'] == 'mean'
     coverage = parc[1]
     assert coverage.entities['statistic'] == 'coverage'
 
@@ -381,9 +387,34 @@ def test_cifti_parcellate_timeseries_coverage_still_pscalar():
 
     parc = plan['parcellate_bold']
     assert [(p.suffix, p.extension, p.source_field) for p in parc] == [
-        ('timeseries', '.ptseries.nii', 'out'),
-        ('timeseries', '.tsv', 'out'),
+        ('timeseries', '.ptseries.nii', 'out_mean'),
+        ('timeseries', '.tsv', 'out_mean'),
         ('boldmap', '.pscalar.nii', 'coverage'),
+    ]
+    # Default single statistic -> the historical pair of files, both stat-mean.
+    assert [p.entities['statistic'] for p in parc[:2]] == ['mean', 'mean']
+
+
+def test_parcellate_timeseries_multiplies_both_the_ptseries_and_the_tsv():
+    """A wide (timepoints x parcels) table cannot hold a second statistic as a column.
+
+    So unlike parcellate_scalar -- which merges statistics into one tidy table --
+    parcellate_timeseries emits a full ptseries+TSV pair per statistic, each labelled
+    with its own ``stat-``.
+    """
+    spec, resolved = _story_3_1()
+    spec.by_name()['parcellate_bold'].parameters['statistics'] = ['median', 'maximum']
+    plan = build_sink_plan(spec, resolved, roots={'xcpd': '/x', 'atlases': '/x'})
+
+    parc = plan['parcellate_bold']
+    assert [
+        (p.suffix, p.extension, p.source_field, p.entities.get('statistic')) for p in parc
+    ] == [
+        ('timeseries', '.ptseries.nii', 'out_median', 'median'),
+        ('timeseries', '.ptseries.nii', 'out_maximum', 'maximum'),
+        ('timeseries', '.tsv', 'out_median', 'median'),
+        ('timeseries', '.tsv', 'out_maximum', 'maximum'),
+        ('boldmap', '.pscalar.nii', 'coverage', 'coverage'),
     ]
 
 
@@ -527,3 +558,35 @@ def test_per_bundle_atlas_label_does_not_leak_the_single_bundle_entity():
     entities = node_output_entities(spec, resolved)
     assert entities['bundle_rois']['atlas'] == 'MyBundles'
     assert 'bundle' not in entities['bundle_rois']
+
+
+def test_probabilistic_cifti_atlas_plans_tables_only(tmp_path):
+    """No native ptseries: a ParcelsAxis needs crisp membership a probseg lacks.
+
+    The data is still CIFTI, so ``_produces_cifti`` says yes -- it is the *atlas*
+    that removes the native product, and the coverage ExtraProduct must follow it
+    to .tsv rather than staying a .pscalar.nii.
+    """
+    import nibabel as nb
+    import numpy as np
+
+    atlas = tmp_path / 'tpl-fsLR_atlas-DiFuMo_scale-64dimensions_probseg.dscalar.nii'
+    brain = nb.cifti2.BrainModelAxis.from_mask(np.ones(8, dtype='int8'), name='thalamus_left')
+    nb.Cifti2Image(
+        np.zeros((3, 8)), header=(nb.cifti2.ScalarAxis(['a', 'b', 'c']), brain)
+    ).to_filename(str(atlas))
+
+    spec, resolved = _story_3_1()
+    resolved = dict(resolved)
+    resolved['atlas_4s'] = Match(
+        str(atlas),
+        {'tpl': 'fsLR', 'atlas': 'DiFuMo', 'suffix': 'probseg', 'extension': '.dscalar.nii'},
+    )
+    plan = build_sink_plan(spec, resolved, roots={'xcpd': '/x', 'atlases': str(tmp_path)})
+
+    parc = plan['parcellate_bold']
+    assert [(p.suffix, p.extension) for p in parc] == [
+        ('timeseries', '.tsv'),
+        ('boldmap', '.tsv'),
+    ]
+    assert not any(p.extension.endswith('.nii') for p in parc)

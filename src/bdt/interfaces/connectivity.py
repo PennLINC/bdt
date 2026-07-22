@@ -41,6 +41,7 @@ from nipype.interfaces.base import (
 )
 
 from bdt.utils.filemanip import fname_presuffix
+from bdt.utils.images import as_float_img
 from bdt.utils.utils import get_col
 from bdt.utils.write_save import write_ndata
 
@@ -60,6 +61,16 @@ class _NiftiParcellateInputSpec(BaseInterfaceInputSpec):
             'Any parcels with lower coverage than the threshold will be replaced with NaNs. '
             'Must be a value between zero and one. '
             'Default is 0.5.'
+        ),
+    )
+    strategy = traits.Str(
+        'mean',
+        usedefault=True,
+        desc=(
+            "How to reduce a parcel's voxels at each timepoint; any nilearn "
+            'NiftiLabelsMasker strategy. Divergence from upstream XCP-D, which is '
+            'always the mean. Only this masker is affected -- the two coverage '
+            "maskers stay on 'sum', which is a voxel count, not a statistic."
         ),
     )
 
@@ -195,12 +206,15 @@ class NiftiParcellate(SimpleInterface):
             # nilearn 0.14.0 raises a FutureWarning for standardize=False; standardize=None
             # is the non-deprecated equivalent.
             standardize=None,
+            strategy=self.inputs.strategy,
             resampling_target=None,  # they should be in the same space/resolution already
             keep_masked_labels=True,
         )
 
-        # Use nilearn to parcellate the file
-        timeseries_arr = masker.fit_transform(self.inputs.filtered_file)
+        # Use nilearn to parcellate the file.  as_float_img: nilearn reduces in the
+        # input dtype, so an integer-typed image would truncate every statistic and
+        # wrap `sum` outright.
+        timeseries_arr = masker.fit_transform(as_float_img(self.inputs.filtered_file))
         if timeseries_arr.ndim == 1:
             # Add singleton first dimension representing time.
             timeseries_arr = timeseries_arr[None, :]

@@ -92,11 +92,11 @@ Supported operations
    * - Operation
      - Description
    * - ``parcellate_timeseries``
-     - Extract per-parcel mean time series from a 4D image (BOLD, ASL).
+     - Extract per-parcel time series from a 4D image (BOLD, ASL), reducing each
+       parcel's voxels with the ``statistics`` parameter's summaries.
    * - ``parcellate_scalar``
-     - Summarize a scalar map (CBF, FA/MD, thickness, …) over parcels. The
-       ``statistics`` parameter names which summaries to compute — ``mean``
-       (the default) and/or ``standard_deviation``.
+     - Summarize a scalar map (CBF, FA/MD, thickness, …) over parcels, likewise
+       via ``statistics``.
    * - ``functional_connectivity``
      - Build a region-by-region connectivity matrix from parcellated time series.
    * - ``streamline_connectivity``
@@ -109,6 +109,37 @@ Supported operations
      - Per-parcel fixel summary (respects fixel cardinality/direction).
    * - ``parcellate_odf``
      - Per-parcel ODF/SH-coefficient summary.
+
+.. note::
+   **Per-parcel statistics.** Both parcellation actions take a ``statistics``
+   parameter naming how each parcel's voxels/vertices are reduced. The vocabulary
+   is nilearn's ``NiftiLabelsMasker`` strategy set — ``mean`` (the default),
+   ``median``, ``sum``, ``minimum``, ``maximum``, ``standard_deviation``,
+   ``variance`` — and every one of them has a Workbench ``-method`` equivalent, so
+   volumetric and grayordinate inputs accept the same list.
+
+   .. code-block:: yaml
+
+      parameters:
+        statistics: [mean, standard_deviation]
+
+   ``standard_deviation`` and ``variance`` are *population* moments (ddof=0).
+   Workbench's sample equivalent (``SAMPSTDEV``) is deliberately not offered,
+   since nilearn has no counterpart and the two backends would disagree.
+
+   Two constraints follow from the shape of the output:
+
+   * A **probabilistic (4D) atlas** weights every voxel, and only ``mean`` and
+     ``standard_deviation`` have an agreed weighted definition, so anything else
+     is an error rather than a silent substitution. ``parcellate_timeseries`` with
+     such an atlas supports ``mean`` alone.
+   * ``parcellate_scalar`` merges its statistics into **one** tidy table (a row
+     per parcel, a column per statistic), while ``parcellate_timeseries`` is wide
+     (timepoints × parcels) with nowhere to put a second statistic, so it emits a
+     separate ``stat-``-labelled file per statistic instead.
+
+   ``functional_connectivity`` correlates only the **first** statistic in the
+   list; it logs which one it picked.
 
 .. note::
    **Tractography I/O.** The only BIDS-compliant tractography format is TRX

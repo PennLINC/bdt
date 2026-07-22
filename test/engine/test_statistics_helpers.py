@@ -6,6 +6,9 @@ import pytest
 
 from bdt.utils.statistics import (
     SUPPORTED_STATISTICS,
+    WEIGHTED_STATISTICS,
+    WORKBENCH_METHOD,
+    WORKBENCH_UNWEIGHTED,
     compose_statistic_entity,
     normalize_statistic,
     parse_statistics,
@@ -27,10 +30,10 @@ def test_a_single_string_is_accepted():
 
 
 def test_unsupported_statistic_names_the_supported_set():
-    with pytest.raises(ValueError, match='median'):
-        parse_statistics({'statistics': ['mean', 'median']})
+    with pytest.raises(ValueError, match='mode'):
+        parse_statistics({'statistics': ['mean', 'mode']})
     with pytest.raises(ValueError, match='standard_deviation'):
-        parse_statistics({'statistics': ['median']})
+        parse_statistics({'statistics': ['trimmed_mean']})
 
 
 def test_duplicates_are_rejected():
@@ -70,5 +73,45 @@ def test_compose_without_a_source_statistic():
     assert compose_statistic_entity('', 'standard_deviation') == 'standarddeviation'
 
 
-def test_supported_set_is_exactly_mean_and_sd():
-    assert SUPPORTED_STATISTICS == ('mean', 'standard_deviation')
+def test_supported_set_is_exactly_nilearns_strategies():
+    """The vocabulary IS nilearn's, so the volumetric path passes names through.
+
+    Pinned against nilearn 0.14.0's own error message, which enumerates the set it
+    accepts. Workbench's SAMPSTDEV (ddof=1) is deliberately excluded: it has no
+    nilearn counterpart, so offering it would make the two backends disagree.
+    """
+    assert set(SUPPORTED_STATISTICS) == {
+        'mean',
+        'median',
+        'sum',
+        'minimum',
+        'maximum',
+        'standard_deviation',
+        'variance',
+    }
+
+
+def test_every_supported_statistic_has_a_workbench_method():
+    """A statistic the grayordinate path cannot express would fail at run time.
+
+    NOTE: name coverage is NOT sufficient on its own -- see
+    :data:`WORKBENCH_UNWEIGHTED`. This assertion originally stood alone and let a
+    run-time crash through, because MIN/MAX have methods but reject
+    ``-cifti-weights``, which the CIFTI path always passed.
+    """
+    assert set(WORKBENCH_METHOD) == set(SUPPORTED_STATISTICS)
+
+
+def test_unweighted_statistics_are_supported_and_are_the_selections():
+    """MIN/MAX reject -cifti-weights because they select rather than compute.
+
+    Measured against wb_command: MEAN/MEDIAN/SUM/STDEV/VARIANCE all accept weights.
+    If a future statistic joins the vocabulary, this is the list to re-measure --
+    a wrong entry here is a crash (missing) or a silently unmasked reduction (extra).
+    """
+    assert set(WORKBENCH_UNWEIGHTED) < set(SUPPORTED_STATISTICS)
+    assert set(WORKBENCH_UNWEIGHTED) == {'minimum', 'maximum'}
+
+
+def test_weighted_statistics_are_a_subset():
+    assert set(WEIGHTED_STATISTICS) <= set(SUPPORTED_STATISTICS)
