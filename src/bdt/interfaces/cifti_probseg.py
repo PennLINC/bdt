@@ -70,9 +70,7 @@ class _CiftiProbSegParcellateInputSpec(BaseInterfaceInputSpec):
             'already being timepoints x parcels.'
         ),
     )
-    min_coverage = traits.Float(
-        0.5, usedefault=True, desc='parcels below this coverage are NaN'
-    )
+    min_coverage = traits.Float(0.5, usedefault=True, desc='parcels below this coverage are NaN')
 
 
 class _CiftiProbSegParcellateOutputSpec(TraitedSpec):
@@ -140,7 +138,9 @@ class CiftiProbSegParcellate(SimpleInterface):
         if n_dropped:
             LOGGER.warning(
                 '%d/%d parcels fall below min_coverage=%.2f and are set to NaN.',
-                n_dropped, n_parcels, self.inputs.min_coverage,
+                n_dropped,
+                n_parcels,
+                self.inputs.min_coverage,
             )
 
         values = self._statistics(statistics, inside, data[:, covered], weight, usable)
@@ -154,9 +154,7 @@ class CiftiProbSegParcellate(SimpleInterface):
             table = {'node': names}
             table.update({stat: values[stat][0] for stat in statistics})
             self._results['tsv'] = os.path.join(runtime.cwd, 'parcellated.tsv')
-            pd.DataFrame(table).to_csv(
-                self._results['tsv'], sep='\t', na_rep='n/a', index=False
-            )
+            pd.DataFrame(table).to_csv(self._results['tsv'], sep='\t', na_rep='n/a', index=False)
             self._results['out_files'] = []
             return runtime
 

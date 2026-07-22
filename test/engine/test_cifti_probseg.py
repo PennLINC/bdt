@@ -58,9 +58,10 @@ def test_weighted_statistics_match_brute_force(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     res = _run(tmp_path, statistics=['mean', 'standard_deviation'])
 
-    got = {s: pd.read_table(f) for s, f in zip(
-        ['mean', 'standard_deviation'], res.outputs.out_files, strict=True
-    )}
+    got = {
+        s: pd.read_table(f)
+        for s, f in zip(['mean', 'standard_deviation'], res.outputs.out_files, strict=True)
+    }
     d = data[:, covered]
     for parcel, name in enumerate(['a', 'b', 'c']):
         w = weights[parcel][covered]
@@ -120,9 +121,9 @@ def test_grayordinate_mismatch_is_an_error(tmp_path, monkeypatch):
     _fixture(tmp_path)
     monkeypatch.chdir(tmp_path)
     axis = nb.cifti2.ScalarAxis(['m0'])
-    nb.Cifti2Image(
-        np.ones((1, N_GRAY - 1)), header=(axis, _brain_model(N_GRAY - 1))
-    ).to_filename(str(tmp_path / 'data.dscalar.nii'))
+    nb.Cifti2Image(np.ones((1, N_GRAY - 1)), header=(axis, _brain_model(N_GRAY - 1))).to_filename(
+        str(tmp_path / 'data.dscalar.nii')
+    )
     with pytest.raises(ValueError, match='Grayordinate counts disagree'):
         _run(tmp_path)
 
@@ -177,7 +178,7 @@ def test_missing_sidecar_names_every_path_tried(tmp_path):
 
     image = tmp_path / 'tpl-fsLR_atlas-X_den-91k_res-2_probseg.dscalar.nii'
     image.touch()
-    with pytest.raises(ValueError) as exc:
+    with pytest.raises(ValueError, match='no labels sidecar') as exc:
         _atlas_labels_sidecar(str(image))
     message = str(exc.value)
     assert 'den-91k_res-2_probseg.tsv' in message  # the exact stem
@@ -230,9 +231,9 @@ def test_dlabel_atlas_still_routes_to_workbench(tmp_path):
 
     label_axis = nb.cifti2.LabelAxis(['parcels'], [{0: ('??', (0, 0, 0, 0))}])
     atlas = tmp_path / 'atlas.dlabel.nii'
-    nb.Cifti2Image(
-        np.zeros((1, N_GRAY)), header=(label_axis, _brain_model())
-    ).to_filename(str(atlas))
+    nb.Cifti2Image(np.zeros((1, N_GRAY)), header=(label_axis, _brain_model())).to_filename(
+        str(atlas)
+    )
 
     node = SimpleNamespace(
         name='parc',
@@ -304,9 +305,9 @@ def test_fc_downstream_of_a_dlabel_parcellation_still_uses_workbench(tmp_path):
 
     label_axis = nb.cifti2.LabelAxis(['parcels'], [{0: ('??', (0, 0, 0, 0))}])
     atlas = tmp_path / 'atlas.dlabel.nii'
-    nb.Cifti2Image(
-        np.zeros((1, N_GRAY)), header=(label_axis, _brain_model())
-    ).to_filename(str(atlas))
+    nb.Cifti2Image(np.zeros((1, N_GRAY)), header=(label_axis, _brain_model())).to_filename(
+        str(atlas)
+    )
 
     spec = parse_spec(
         {

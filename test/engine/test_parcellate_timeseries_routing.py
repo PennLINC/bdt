@@ -256,11 +256,15 @@ def test_nifti_parcellate_yml_compiles_end_to_end(tmp_path):
     statistics = spec.by_name()['parcellate_bold_4s456'].parameters['statistics']
     assert len(statistics) == 7, 'fixture should exercise the full vocabulary'
     for stat in statistics:
-        node_name = next(n for n in names if n.endswith(f'parcellate_bold_4s456.parcellate_{stat}'))
+        node_name = next(
+            n for n in names if n.endswith(f'parcellate_bold_4s456.parcellate_{stat}')
+        )
         assert wf.get_node(node_name).inputs.strategy == stat
     # ...while parcellate_scalar merges them into ONE tidy node instead
     assert has_suffix('parcellate_cbf_4s456.parcellate'), names
-    scalar_node = wf.get_node(next(n for n in names if n.endswith('parcellate_cbf_4s456.parcellate')))
+    scalar_node = wf.get_node(
+        next(n for n in names if n.endswith('parcellate_cbf_4s456.parcellate'))
+    )
     assert list(scalar_node.inputs.statistics) == statistics
 
     # and the sink plan reflects the asymmetry: 7 wide timeseries tables vs 1 tidy one
@@ -275,7 +279,9 @@ def test_nifti_parcellate_yml_compiles_end_to_end(tmp_path):
         normalize_statistic(s) for s in statistics
     ]
     assert 'standarddeviation' in {p.entities['statistic'] for p in timeseries}
-    tables = [p for p in plan['parcellate_cbf_4s456'] if p.extension == '.tsv' and p.suffix == 'cbf']
+    tables = [
+        p for p in plan['parcellate_cbf_4s456'] if p.extension == '.tsv' and p.suffix == 'cbf'
+    ]
     assert len(tables) == 1, tables
     assert 'statistic' not in tables[0].entities
 

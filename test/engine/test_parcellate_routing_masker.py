@@ -265,7 +265,9 @@ def test_brain_mask_query_is_scoped_to_the_data_acquisition(tmp_path):
     provider = _mask_provider(tmp_path, _MASKS)
     node, ctx = _bold_node_and_context(tmp_path, provider)
 
-    chosen = init_parcellate_timeseries_wf(node, context=ctx).get_node('parcellate_mean').inputs.mask
+    chosen = (
+        init_parcellate_timeseries_wf(node, context=ctx).get_node('parcellate_mean').inputs.mask
+    )
     assert 'task-rest_acq-multiband' in chosen, chosen
     assert 'fracback' not in chosen, chosen
     assert 'rec-refaced' not in chosen, chosen
@@ -282,7 +284,9 @@ def test_brain_mask_falls_back_when_scoping_over_constrains(tmp_path):
     provider = _mask_provider(tmp_path, [only_mask])
     node, ctx = _bold_node_and_context(tmp_path, provider, bold_entities=bold)
 
-    chosen = init_parcellate_timeseries_wf(node, context=ctx).get_node('parcellate_mean').inputs.mask
+    chosen = (
+        init_parcellate_timeseries_wf(node, context=ctx).get_node('parcellate_mean').inputs.mask
+    )
     assert 'task-rest_acq-multiband' in chosen, chosen
 
 

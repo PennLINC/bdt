@@ -168,9 +168,7 @@ class ProbSegParcellate(SimpleInterface):
                 sd = np.empty_like(means)
                 for row in range(w.shape[0]):
                     deviation = data - means[row][:, None]
-                    sd[row] = np.sqrt(
-                        (w[row] * deviation**2).sum(axis=1) / covered[usable][row]
-                    )
+                    sd[row] = np.sqrt((w[row] * deviation**2).sum(axis=1) / covered[usable][row])
                 values['standard_deviation'][:, usable] = sd.T
 
         n_dropped = int((~usable).sum())

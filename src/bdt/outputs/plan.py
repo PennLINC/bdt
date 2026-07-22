@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from functools import partial
 
 from bdt.engine.selection import Match
 from bdt.outputs.provenance import bids_uri, build_sidecar, generated_by
@@ -280,6 +281,59 @@ def _sources(
     return uris
 
 
+def _statistic_products(
+    requested: list[str],
+    mid: dict,
+    sidecar: dict,
+    common: dict,
+    source_statistic: str | None,
+    suffix: str,
+    extension: str,
+    derive: str = PASSTHROUGH,
+    field: str = 'out',
+) -> list[OutputProduct]:
+    """One product per requested statistic, or a single unlabelled one.
+
+    A file holding one value per parcel — a parcellated CIFTI, or a wide
+    (timepoints x parcels) TSV — can only carry a single statistic, so N statistics
+    mean N files distinguished by ``stat-``, each reading its own ``out_<stat>``
+    field.  ``requested`` is empty for actions that do not accept ``statistics``,
+    which then keep exactly one product named as before.
+
+    The per-node context comes in as explicit arguments rather than a closure:
+    ``build_sink_plan`` calls this from inside its node loop, and capturing loop
+    variables there is the classic late-binding trap (ruff B023).
+    """
+    if not requested:
+        return [
+            OutputProduct(
+                derive=derive,
+                suffix=suffix,
+                extension=extension,
+                entities=dict(mid),
+                sidecar=dict(sidecar),
+                source_field=field,
+                **common,
+            )
+        ]
+    products = []
+    for stat in requested:
+        stat_ent = dict(mid)
+        stat_ent['statistic'] = compose_statistic_entity(source_statistic, stat)
+        products.append(
+            OutputProduct(
+                derive=derive,
+                suffix=suffix,
+                extension=extension,
+                entities=stat_ent,
+                sidecar=dict(sidecar),
+                source_field=f'{field}_{stat}',
+                **common,
+            )
+        )
+    return products
+
+
 def build_sink_plan(
     spec: Spec,
     resolved: dict[str, Match],
@@ -334,48 +388,17 @@ def build_sink_plan(
         # accept ``statistics`` keep exactly one product.  ``tsv_source_field`` marks
         # the exception: that action already merged every statistic into one tidy
         # table inside its sub-workflow, so its table is *not* multiplied.
-        requested = (
-            parse_statistics(node.parameters) if 'statistics' in aspec.parameters else []
-        )
+        requested = parse_statistics(node.parameters) if 'statistics' in aspec.parameters else []
         merges_statistics = bool(out.tsv_source_field)
-        source_statistic = mid.get('statistic')
-
-        def _per_statistic(suffix, extension, derive=PASSTHROUGH, field='out'):
-            """One product per requested statistic, or a single unlabelled one."""
-            if not requested:
-                return [
-                    OutputProduct(
-                        derive=derive,
-                        suffix=suffix,
-                        extension=extension,
-                        entities=dict(mid),
-                        sidecar=dict(sidecar),
-                        source_field=field,
-                        **common,
-                    )
-                ]
-            out_products = []
-            for stat in requested:
-                stat_ent = dict(mid)
-                stat_ent['statistic'] = compose_statistic_entity(source_statistic, stat)
-                out_products.append(
-                    OutputProduct(
-                        derive=derive,
-                        suffix=suffix,
-                        extension=extension,
-                        entities=stat_ent,
-                        sidecar=dict(sidecar),
-                        source_field=f'{field}_{stat}',
-                        **common,
-                    )
-                )
-            return out_products
+        per_statistic = partial(
+            _statistic_products, requested, mid, sidecar, common, mid.get('statistic')
+        )
 
         # ``_produces_cifti`` already answers False for a probabilistic-atlas node,
         # so this covers both "the data was volumetric" and "the atlas was a probseg".
         native_cifti = bool(cifti_by_node.get(node.name))
         if native_cifti and cifti_suffix and out.cifti_extension:
-            products.extend(_per_statistic(cifti_suffix, out.cifti_extension))
+            products.extend(per_statistic(cifti_suffix, out.cifti_extension))
             # ... plus a flattened TSV for tabular (parcellated) outputs, but not for
             # a dense CIFTI (a resampled/mapped surface scalar has no table form).
             if out.emit_tsv:
@@ -395,9 +418,7 @@ def build_sink_plan(
                         )
                     )
                 else:
-                    products.extend(
-                        _per_statistic(tsv_suffix, out.extension, derive=CIFTI_TO_TSV)
-                    )
+                    products.extend(per_statistic(tsv_suffix, out.extension, derive=CIFTI_TO_TSV))
         elif merges_statistics:
             # Volumetric, tidy: one table, every statistic a column.
             products.append(
@@ -412,7 +433,7 @@ def build_sink_plan(
             )
         else:
             # Volumetric / already-tabular: the primary product, per statistic.
-            products.extend(_per_statistic(primary_suffix, out.extension))
+            products.extend(per_statistic(primary_suffix, out.extension))
 
         # Secondary products (e.g. the parcel-coverage map) from other outputnode fields.
         for ep in out.extra:

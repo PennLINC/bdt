@@ -663,9 +663,7 @@ def _init_parcellate_cifti_probseg_wf(
     # ``out_files`` is one table per statistic in request order; split it so each
     # lands on its own outputnode field, as the dlabel path's per-statistic nodes do.
     for index, stat in enumerate(statistics):
-        pick = pe.Node(
-            niu.Select(index=index), name=f'pick_{stat}'
-        )
+        pick = pe.Node(niu.Select(index=index), name=f'pick_{stat}')
         wf.connect([
             (parcellate, pick, [('out_files', 'inlist')]),
             (pick, outputnode, [('out', f'out_{stat}')]),
@@ -1010,9 +1008,9 @@ def _init_parcellate_volumetric_wf(node, name, context, data_role: str) -> pe.Wo
 
     fan_out = built[0][3] is None  # one node emitting `out_files`, split below
     fields = ['out', 'coverage']
-    fields += [f'out_{s}' for s in statistics] if fan_out else [
-        f[4] for f in built if f[4] != 'out'
-    ]
+    fields += (
+        [f'out_{s}' for s in statistics] if fan_out else [f[4] for f in built if f[4] != 'out']
+    )
     outputnode = pe.Node(niu.IdentityInterface(fields=fields), name='outputnode')
     atlas_node, atlas_field = _warp_atlas_field(wf, node, context, inputnode, data_role)
 
@@ -1066,7 +1064,7 @@ def _warn_connectivity_statistic(node, context) -> None:
         statistics = parse_statistics(up.parameters)
         if len(statistics) > 1:
             LOGGER.warning(
-                "Node %r: %r computes %s; connectivity is correlated from %r, the "
+                'Node %r: %r computes %s; connectivity is correlated from %r, the '
                 'first requested. Reorder the `statistics` list to change it.',
                 node.name,
                 up_name,

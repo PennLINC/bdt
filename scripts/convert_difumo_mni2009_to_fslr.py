@@ -177,9 +177,7 @@ def convert(
     try:
         mni6_reference = working / 'fslr91k_volume_space.nii.gz'
         mni6_atlas = working / 'difumo_mni6_res-2_probseg.nii.gz'
-        metrics = {
-            hemi: working / f'difumo_hemi-{hemi}_den-32k.func.gii' for hemi in ('L', 'R')
-        }
+        metrics = {hemi: working / f'difumo_hemi-{hemi}_den-32k.func.gii' for hemi in ('L', 'R')}
         staged_output = working / output_file.name
 
         # Extract the exact volume grid from the CIFTI and use it as the ANTs
