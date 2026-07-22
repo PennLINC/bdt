@@ -36,9 +36,7 @@ def test_columns_are_node_plus_each_statistic(tmp_path, monkeypatch):
     a = _pscalar(tmp_path / 'mean.pscalar.nii', [1.0, 2.0, 3.0])
     b = _pscalar(tmp_path / 'sd.pscalar.nii', [0.1, 0.2, 0.3])
 
-    res = PscalarsToTidyTsv(
-        in_files=[a, b], statistics=['mean', 'standard_deviation']
-    ).run()
+    res = PscalarsToTidyTsv(in_files=[a, b], statistics=['mean', 'standard_deviation']).run()
     df = pd.read_table(res.outputs.out_file)
 
     assert list(df.columns) == ['node', 'mean', 'standard_deviation']
@@ -69,9 +67,7 @@ def test_file_and_statistic_counts_must_agree(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     a = _pscalar(tmp_path / 'mean.pscalar.nii', [1.0, 2.0, 3.0])
     with pytest.raises(ValueError, match='1 file.*2 statistic'):
-        PscalarsToTidyTsv(
-            in_files=[a], statistics=['mean', 'standard_deviation']
-        ).run()
+        PscalarsToTidyTsv(in_files=[a], statistics=['mean', 'standard_deviation']).run()
 
 
 def test_mismatched_parcel_names_are_rejected(tmp_path, monkeypatch):
@@ -80,6 +76,4 @@ def test_mismatched_parcel_names_are_rejected(tmp_path, monkeypatch):
     a = _pscalar(tmp_path / 'mean.pscalar.nii', [1.0, 2.0, 3.0])
     b = _pscalar(tmp_path / 'sd.pscalar.nii', [1.0, 2.0], names=('P1', 'P2'))
     with pytest.raises(ValueError, match='parcel'):
-        PscalarsToTidyTsv(
-            in_files=[a, b], statistics=['mean', 'standard_deviation']
-        ).run()
+        PscalarsToTidyTsv(in_files=[a, b], statistics=['mean', 'standard_deviation']).run()

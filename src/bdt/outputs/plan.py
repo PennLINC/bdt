@@ -115,7 +115,7 @@ def _own_atlas_label(node: Node, base: dict) -> str:
         f'Node {node.name!r} builds an atlas but its label cannot be inferred: the '
         "source carries no 'bundles' (bundle-set) entity, which happens when there "
         'is one file per bundle rather than a single aggregate file. Set it '
-        f"explicitly, e.g.\n  - name: {node.name}\n    parameters: {{atlas: MyAtlas}}"
+        f'explicitly, e.g.\n  - name: {node.name}\n    parameters: {{atlas: MyAtlas}}'
     )
 
 

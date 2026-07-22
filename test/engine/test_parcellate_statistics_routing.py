@@ -27,10 +27,12 @@ def _node(name='parc', **parameters):
 
 
 def _cifti_context():
-    return FactoryContext(resolved={
-        'load_scalar': Match('s.dscalar.nii', {'extension': '.dscalar.nii'}),
-        'load_atlas': Match('a.dlabel.nii', {'extension': '.dlabel.nii'}),
-    })
+    return FactoryContext(
+        resolved={
+            'load_scalar': Match('s.dscalar.nii', {'extension': '.dscalar.nii'}),
+            'load_atlas': Match('a.dlabel.nii', {'extension': '.dlabel.nii'}),
+        }
+    )
 
 
 def test_cifti_default_builds_one_mean_parcellation():
@@ -51,7 +53,11 @@ def test_cifti_two_statistics_build_two_parcellations():
     assert wf.get_node('parcellate_data_mean').inputs.cor_method == 'MEAN'
     assert wf.get_node('parcellate_data_standard_deviation').inputs.cor_method == 'STDEV'
     assert _identity_fields(wf, 'outputnode') == {
-        'out', 'out_mean', 'out_standard_deviation', 'coverage', 'tsv'
+        'out',
+        'out_mean',
+        'out_standard_deviation',
+        'coverage',
+        'tsv',
     }
 
 
@@ -77,13 +83,17 @@ def test_cifti_tidy_tsv_node_receives_every_statistic():
 def test_parcellate_timeseries_cifti_is_untouched():
     """The timeseries path keeps its original node names and outputnode fields."""
     node = SimpleNamespace(
-        name='parc', inputs={'timeseries': ['load_bold'], 'atlas': ['load_atlas']},
-        parameters={}, desc=None,
+        name='parc',
+        inputs={'timeseries': ['load_bold'], 'atlas': ['load_atlas']},
+        parameters={},
+        desc=None,
     )
-    ctx = FactoryContext(resolved={
-        'load_bold': Match('b.dtseries.nii', {'extension': '.dtseries.nii'}),
-        'load_atlas': Match('a.dlabel.nii', {'extension': '.dlabel.nii'}),
-    })
+    ctx = FactoryContext(
+        resolved={
+            'load_bold': Match('b.dtseries.nii', {'extension': '.dtseries.nii'}),
+            'load_atlas': Match('a.dlabel.nii', {'extension': '.dlabel.nii'}),
+        }
+    )
     wf = init_parcellate_timeseries_wf(node, context=ctx)
     names = set(wf.list_node_names())
     assert 'parcellate_data' in names
@@ -110,19 +120,41 @@ def _volumetric_context(tmp_path, ndim=3):
     nb.Nifti1Image(np.ones((4, 4, 4), 'uint8'), np.eye(4)).to_filename(mask)
 
     return FactoryContext(
-        provider=DictDataProvider({'fmriprep': [Match(str(mask), {
-            'space': 'MNI152NLin6Asym', 'suffix': 'mask', 'desc': 'brain',
-            'datatype': 'func',
-        })]}),
-        subject='01', datasets=['fmriprep'],
+        provider=DictDataProvider(
+            {
+                'fmriprep': [
+                    Match(
+                        str(mask),
+                        {
+                            'space': 'MNI152NLin6Asym',
+                            'suffix': 'mask',
+                            'desc': 'brain',
+                            'datatype': 'func',
+                        },
+                    )
+                ]
+            }
+        ),
+        subject='01',
+        datasets=['fmriprep'],
         resolved={
-            'load_scalar': Match('/d/sub-01_space-MNI152NLin6Asym_cbf.nii.gz', {
-                'space': 'MNI152NLin6Asym', 'suffix': 'cbf', 'datatype': 'func',
-                'extension': '.nii.gz',
-            }),
-            'load_atlas': Match(str(atlas), {
-                'space': 'MNI152NLin6Asym', 'suffix': 'dseg', 'extension': '.nii.gz',
-            }),
+            'load_scalar': Match(
+                '/d/sub-01_space-MNI152NLin6Asym_cbf.nii.gz',
+                {
+                    'space': 'MNI152NLin6Asym',
+                    'suffix': 'cbf',
+                    'datatype': 'func',
+                    'extension': '.nii.gz',
+                },
+            ),
+            'load_atlas': Match(
+                str(atlas),
+                {
+                    'space': 'MNI152NLin6Asym',
+                    'suffix': 'dseg',
+                    'extension': '.nii.gz',
+                },
+            ),
         },
     )
 
@@ -157,8 +189,10 @@ def test_volumetric_timeseries_still_uses_nifti_parcellate(tmp_path):
 
     ctx = _volumetric_context(tmp_path)
     node = SimpleNamespace(
-        name='parc', inputs={'timeseries': ['load_scalar'], 'atlas': ['load_atlas']},
-        parameters={}, desc=None,
+        name='parc',
+        inputs={'timeseries': ['load_scalar'], 'atlas': ['load_atlas']},
+        parameters={},
+        desc=None,
     )
     wf = init_parcellate_timeseries_wf(node, context=ctx)
     assert isinstance(wf.get_node('parcellate').interface, NiftiParcellate)

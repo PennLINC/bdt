@@ -552,7 +552,10 @@ def init_parcellate_scalar_wf(node, name=None, context=None) -> pe.Workflow:
         from bdt.utils.statistics import parse_statistics
 
         return _init_parcellate_cifti_wf(
-            node, name, 'scalar', 'parcellated.pscalar.nii',
+            node,
+            name,
+            'scalar',
+            'parcellated.pscalar.nii',
             statistics=parse_statistics(node.parameters),
         )
     return _init_parcellate_volumetric_wf(node, name, context, 'scalar')

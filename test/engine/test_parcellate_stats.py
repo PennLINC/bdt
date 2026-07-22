@@ -61,25 +61,25 @@ def test_dseg_standard_deviation_is_the_population_sd(tmp_path, monkeypatch):
     atlas, _, scalar = _dseg_fixture(tmp_path)
     monkeypatch.chdir(tmp_path)
     df = pd.read_table(
-        _run(tmp_path, statistics=['mean', 'standard_deviation'], min_coverage=0.0)
-        .outputs.out_file
+        _run(
+            tmp_path, statistics=['mean', 'standard_deviation'], min_coverage=0.0
+        ).outputs.out_file
     )
 
     assert list(df.columns) == ['node', 'mean', 'standard_deviation']
     for row, value in enumerate((1, 2)):
         vals = scalar[atlas == value]
         assert df['standard_deviation'][row] == pytest.approx(float(vals.std()), rel=1e-5)
-        assert df['standard_deviation'][row] != pytest.approx(
-            float(vals.std(ddof=1)), rel=1e-9
-        )
+        assert df['standard_deviation'][row] != pytest.approx(float(vals.std(ddof=1)), rel=1e-9)
 
 
 def test_column_order_follows_the_request(tmp_path, monkeypatch):
     _dseg_fixture(tmp_path)
     monkeypatch.chdir(tmp_path)
     df = pd.read_table(
-        _run(tmp_path, statistics=['standard_deviation', 'mean'], min_coverage=0.0)
-        .outputs.out_file
+        _run(
+            tmp_path, statistics=['standard_deviation', 'mean'], min_coverage=0.0
+        ).outputs.out_file
     )
     assert list(df.columns) == ['node', 'standard_deviation', 'mean']
 
@@ -97,8 +97,9 @@ def test_dseg_statistics_respect_the_brain_mask(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
     df = pd.read_table(
-        _run(tmp_path, statistics=['mean', 'standard_deviation'], min_coverage=0.0)
-        .outputs.out_file
+        _run(
+            tmp_path, statistics=['mean', 'standard_deviation'], min_coverage=0.0
+        ).outputs.out_file
     )
     inside = scalar[:3]
     assert df['mean'][0] == pytest.approx(float(inside.mean()), rel=1e-5)
@@ -145,8 +146,9 @@ def test_pseg_weighted_mean_and_sd_match_brute_force(tmp_path, monkeypatch):
     atlas, mask, scalar = _pseg_fixture(tmp_path)
     monkeypatch.chdir(tmp_path)
     df = pd.read_table(
-        _run(tmp_path, statistics=['mean', 'standard_deviation'], min_coverage=0.0)
-        .outputs.out_file
+        _run(
+            tmp_path, statistics=['mean', 'standard_deviation'], min_coverage=0.0
+        ).outputs.out_file
     )
 
     inside = mask > 0
@@ -166,7 +168,9 @@ def test_pseg_binarize_matches_the_plain_masked_statistics(tmp_path, monkeypatch
     monkeypatch.chdir(tmp_path)
     df = pd.read_table(
         _run(
-            tmp_path, statistics=['mean', 'standard_deviation'], binarize=True,
+            tmp_path,
+            statistics=['mean', 'standard_deviation'],
+            binarize=True,
             min_coverage=0.0,
         ).outputs.out_file
     )
@@ -219,7 +223,8 @@ def test_parcels_lost_from_the_atlas_image_are_reported_as_missing(tmp_path, mon
     df = pd.read_table(result.outputs.out_file)
 
     assert df['node'].tolist() == ['A', 'GONE', 'C']
-    assert np.isnan(df['mean'][1]) and np.isnan(df['standard_deviation'][1])
+    assert np.isnan(df['mean'][1])
+    assert np.isnan(df['standard_deviation'][1])
     assert df['mean'][0] == pytest.approx(float(scalar[atlas == 1].mean()), rel=1e-5)
     assert df['mean'][2] == pytest.approx(float(scalar[atlas == 3].mean()), rel=1e-5)
 
@@ -267,4 +272,5 @@ def test_zero_coverage_is_missing_even_at_min_coverage_zero(tmp_path, monkeypatc
     )
 
     assert df['mean'][0] == pytest.approx(float(scalar[:3].mean()), rel=1e-5)
-    assert np.isnan(df['mean'][1]) and np.isnan(df['standard_deviation'][1])
+    assert np.isnan(df['mean'][1])
+    assert np.isnan(df['standard_deviation'][1])

@@ -63,9 +63,7 @@ class _ParcellateScalarStatisticsInputSpec(BaseInterfaceInputSpec):
         usedefault=True,
         desc='per-parcel statistics to compute, in output column order',
     )
-    binarize = traits.Bool(
-        False, usedefault=True, desc='binarize each volume of a 4D atlas first'
-    )
+    binarize = traits.Bool(False, usedefault=True, desc='binarize each volume of a 4D atlas first')
     min_coverage = traits.Float(
         0.5, usedefault=True, desc='parcels below this coverage are NaN in every column'
     )
@@ -118,7 +116,9 @@ class ParcellateScalarStatistics(SimpleInterface):
         if n_dropped:
             LOGGER.warning(
                 '%d/%d parcels fall below min_coverage=%.2f and are set to NaN.',
-                n_dropped, len(names), self.inputs.min_coverage,
+                n_dropped,
+                len(names),
+                self.inputs.min_coverage,
             )
 
         table = {'node': names}
@@ -127,14 +127,12 @@ class ParcellateScalarStatistics(SimpleInterface):
             table[stat] = np.where(usable, column, np.nan)
 
         self._results['out_file'] = os.path.join(runtime.cwd, 'parcellated.tsv')
-        pd.DataFrame(table).to_csv(
-            self._results['out_file'], sep='\t', na_rep='n/a', index=False
-        )
+        pd.DataFrame(table).to_csv(self._results['out_file'], sep='\t', na_rep='n/a', index=False)
 
         self._results['coverage'] = os.path.join(runtime.cwd, 'coverage.tsv')
-        pd.DataFrame(
-            coverage.astype(np.float32), index=names, columns=['coverage']
-        ).to_csv(self._results['coverage'], sep='\t', na_rep='n/a', index_label='Node')
+        pd.DataFrame(coverage.astype(np.float32), index=names, columns=['coverage']).to_csv(
+            self._results['coverage'], sep='\t', na_rep='n/a', index_label='Node'
+        )
         return runtime
 
     def _label_atlas(self, labels_df, atlas_img, statistics):
@@ -171,14 +169,17 @@ class ParcellateScalarStatistics(SimpleInterface):
         # uint8 image of ones wraps modulo 256 (256 voxels -> 0, 300 -> 44), silently
         # corrupting these counts.  Parcels of <=255 voxels are unaffected, so a small
         # fixture will not reproduce it -- real parcels are far larger.
-        binary = nb.Nifti1Image(
-            (atlas_img.get_fdata() > 0).astype(np.float32), atlas_img.affine
-        )
+        binary = nb.Nifti1Image((atlas_img.get_fdata() > 0).astype(np.float32), atlas_img.affine)
         counts = {}
         for key, mask_img in (('covered', self.inputs.mask), ('total', None)):
             masker = NiftiLabelsMasker(
-                labels_img=atlas_img, lut=lut, background_label=0, mask_img=mask_img,
-                strategy='sum', resampling_target=None, keep_masked_labels=True,
+                labels_img=atlas_img,
+                lut=lut,
+                background_label=0,
+                mask_img=mask_img,
+                strategy='sum',
+                resampling_target=None,
+                keep_masked_labels=True,
                 standardize=None,
             )
             counts[key] = np.atleast_1d(np.squeeze(masker.fit_transform(binary)))
@@ -190,14 +191,17 @@ class ParcellateScalarStatistics(SimpleInterface):
         values = {}
         for stat in statistics:
             masker = NiftiLabelsMasker(
-                labels_img=atlas_img, lut=lut, background_label=0,
-                mask_img=self.inputs.mask, strategy=_NILEARN_STRATEGY[stat],
-                resampling_target=None, keep_masked_labels=True, standardize=None,
+                labels_img=atlas_img,
+                lut=lut,
+                background_label=0,
+                mask_img=self.inputs.mask,
+                strategy=_NILEARN_STRATEGY[stat],
+                resampling_target=None,
+                keep_masked_labels=True,
+                standardize=None,
             )
             column = np.full(n_nodes, np.nan, dtype='float64')
-            column[positions] = np.atleast_1d(
-                np.squeeze(masker.fit_transform(self.inputs.scalar))
-            )
+            column[positions] = np.atleast_1d(np.squeeze(masker.fit_transform(self.inputs.scalar)))
             values[stat] = column
         return names, values, coverage
 

@@ -397,8 +397,9 @@ def test_atlas_label_inferred_from_the_bundle_set_entity():
     entities = node_output_entities(spec, resolved)
     assert entities['bundle_rois']['atlas'] == 'DSIStudio'
 
-    primary = next(p for p in build_sink_plan(spec, resolved, {})['bundle_rois']
-                   if p.extension == '.nii.gz')
+    primary = next(
+        p for p in build_sink_plan(spec, resolved, {})['bundle_rois'] if p.extension == '.nii.gz'
+    )
     assert primary.entities['atlas'] == 'DSIStudio'
 
 
@@ -416,8 +417,7 @@ def test_per_bundle_source_without_an_atlas_parameter_raises():
     spec, resolved = _pseg_spec(threshold=0.5)
     resolved['load_bundles'] = Match(
         path='/x/sub-01_bundle-CST_space-ACPC_streamlines.tck.gz',
-        entities={'subject': '01', 'space': 'ACPC', 'suffix': 'streamlines',
-                  'bundle': 'CST'},
+        entities={'subject': '01', 'space': 'ACPC', 'suffix': 'streamlines', 'bundle': 'CST'},
     )
     with pytest.raises(ValueError, match='atlas: MyAtlas'):
         node_output_entities(spec, resolved)
@@ -453,8 +453,13 @@ def _cifti_scalar_spec(**parameters):
         'load_alff': Match(
             path='/x/sub-01_stat-alff_boldmap.dscalar.nii',
             entities={
-                'subject': '01', 'space': 'fsLR', 'den': '91k', 'statistic': 'alff',
-                'suffix': 'boldmap', 'datatype': 'func', 'extension': '.dscalar.nii',
+                'subject': '01',
+                'space': 'fsLR',
+                'den': '91k',
+                'statistic': 'alff',
+                'suffix': 'boldmap',
+                'datatype': 'func',
+                'extension': '.dscalar.nii',
             },
         ),
         'atlas': Match(path='/a/atlas.dlabel.nii', entities={'atlas': '4S1056Parcels'}),
@@ -472,9 +477,7 @@ def test_cifti_scalar_plans_one_pscalar_per_statistic_and_one_tsv():
     assert len(tsvs) == 1, 'the tidy table is singular, whatever the statistic count'
 
     # source statistic first, joined with '+', normalized to alphanumerics
-    assert [p.entities['statistic'] for p in pscalars] == [
-        'alff+mean', 'alff+standarddeviation'
-    ]
+    assert [p.entities['statistic'] for p in pscalars] == ['alff+mean', 'alff+standarddeviation']
     # each reads its own outputnode field
     assert [p.source_field for p in pscalars] == ['out_mean', 'out_standard_deviation']
     # the tidy table keeps the source's own statistic and is passed through, not converted
@@ -497,8 +500,12 @@ def test_volumetric_scalar_plans_one_tsv_and_no_pscalar():
     resolved['load_alff'] = Match(
         path='/x/sub-01_stat-alff_boldmap.nii.gz',
         entities={
-            'subject': '01', 'space': 'MNI152NLin6Asym', 'statistic': 'alff',
-            'suffix': 'boldmap', 'datatype': 'func', 'extension': '.nii.gz',
+            'subject': '01',
+            'space': 'MNI152NLin6Asym',
+            'statistic': 'alff',
+            'suffix': 'boldmap',
+            'datatype': 'func',
+            'extension': '.nii.gz',
         },
     )
     prods = build_sink_plan(spec, resolved, roots={'xcpd': '/x', 'atlases': '/a'})['alff_parc']
@@ -514,8 +521,7 @@ def test_per_bundle_atlas_label_does_not_leak_the_single_bundle_entity():
     spec, resolved = _pseg_spec(threshold=0.5)
     resolved['load_bundles'] = Match(
         path='/x/sub-01_bundle-CST_space-ACPC_streamlines.tck.gz',
-        entities={'subject': '01', 'space': 'ACPC', 'suffix': 'streamlines',
-                  'bundle': 'CST'},
+        entities={'subject': '01', 'space': 'ACPC', 'suffix': 'streamlines', 'bundle': 'CST'},
     )
     spec.by_name()['bundle_rois'].parameters['atlas'] = 'MyBundles'
     entities = node_output_entities(spec, resolved)
