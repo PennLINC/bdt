@@ -177,9 +177,7 @@ def test_write_dataset_description_aggregates_and_links(tmp_path, monkeypatch):
     # DatasetLinks: absolute paths, templateflow URL, raw link
     assert desc['DatasetLinks']['A'] == os.path.abspath(str(a))
     assert desc['DatasetLinks']['B'] == os.path.abspath(str(b))
-    assert desc['DatasetLinks']['templateflow'] == (
-        'https://github.com/templateflow/templateflow'
-    )
+    assert desc['DatasetLinks']['templateflow'] == ('https://github.com/templateflow/templateflow')
     assert desc['DatasetLinks']['raw'] == os.path.abspath(str(bids))
 
 
@@ -191,9 +189,9 @@ def test_write_dataset_description_dedups_generated_by(tmp_path):
     _write_input_desc(b, [entry])  # same entry surfaced by two inputs
     out = tmp_path / 'out'
     out.mkdir()
-    gb = json.loads(
-        write_dataset_description(out, {'A': str(a), 'B': str(b)}).read_text()
-    )['GeneratedBy']
+    gb = json.loads(write_dataset_description(out, {'A': str(a), 'B': str(b)}).read_text())[
+        'GeneratedBy'
+    ]
     assert gb.count(entry) == 1
     assert gb[0]['Name'] == 'BDT'
 

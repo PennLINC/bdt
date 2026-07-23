@@ -841,7 +841,7 @@ def _assert_same_grid(node, context, data_role, atlas_space, data_space) -> None
     try:
         atlas_img = nb.load(atlas_path)
         data_img = nb.load(data_path)
-    except Exception:  # unreadable here means unreadable later, with a better message
+    except Exception:  # noqa: BLE001 -- unreadable here means unreadable later, with a better message
         return
 
     import numpy as np
@@ -861,8 +861,8 @@ def _assert_same_grid(node, context, data_role, atlas_space, data_space) -> None
         f'  data  {data_path}\n'
         f'        shape {data_img.shape[:3]}, zooms '
         f'{tuple(round(float(z), 3) for z in data_img.header.get_zooms()[:3])}\n'
-        'A file with no `space-` entity is in its own modality\'s native space; give '
-        'it one (or select a version already in the other\'s space) so the transform '
+        "A file with no `space-` entity is in its own modality's native space; give "
+        "it one (or select a version already in the other's space) so the transform "
         'graph can connect them.'
     )
 

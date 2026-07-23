@@ -98,7 +98,9 @@ def test_an_explicit_space_still_wins(tmp_path):
     node = _node()
     assert ctx.role_space(node, 'atlas') == 'MNI152NLin6Asym'
     # same named space -> no warp, and the grids agree so the guard is satisfied
-    assert 'warp_atlas' not in set(init_parcellate_timeseries_wf(node, context=ctx).list_node_names())
+    assert 'warp_atlas' not in set(
+        init_parcellate_timeseries_wf(node, context=ctx).list_node_names()
+    )
 
 
 def test_the_brain_mask_query_asks_for_an_absent_space_not_the_resolved_one(tmp_path):
