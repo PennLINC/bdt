@@ -24,6 +24,8 @@
 gated end-to-end run on the real GRMPY test data when wb_command is present."""
 
 import importlib.util
+import json
+import os
 import shutil
 from pathlib import Path
 
@@ -599,3 +601,47 @@ def test_surface_scalar_parcellation_end_to_end(tmp_path):
     # cortical parcels get thickness; subcortical parcels (no cortex data) are NaN
     assert 350 < finite.size < 456
     assert 1.0 < float(finite.mean()) < 4.0  # plausible cortical thickness (mm)
+
+
+def test_run_spec_writes_dataset_description(tmp_path):
+    """run_spec writes a derivative dataset_description.json before any workflow runs."""
+    from bdt.engine.pipeline import run_spec
+
+    ds = tmp_path / 'ds'
+    ds.mkdir()
+    bids = tmp_path / 'rawbids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+
+    spec = parse_spec(
+        {
+            'nodes': [
+                {
+                    'name': 'sel',
+                    'action': 'select_data',
+                    'dataset': 'ds',
+                    'filters': {'suffix': 'bold'},
+                }
+            ]
+        }
+    )
+    provider = DictDataProvider({'ds': []})  # matches nothing -> SelectionError
+
+    # The description is written up front; resolution then fails on the empty match.
+    with pytest.raises(SelectionError):
+        run_spec(
+            spec,
+            {'ds': str(ds)},
+            out,
+            tmp_path / 'work',
+            subjects=['01'],
+            provider=provider,
+            validate=False,
+            bids_dir=str(bids),
+        )
+
+    desc = json.loads((out / 'dataset_description.json').read_text())
+    assert desc['DatasetType'] == 'derivative'
+    assert desc['DatasetLinks']['ds'] == os.path.abspath(str(ds))
+    assert desc['DatasetLinks']['raw'] == os.path.abspath(str(bids))
+    assert desc['GeneratedBy'][0]['Name'] == 'BDT'
