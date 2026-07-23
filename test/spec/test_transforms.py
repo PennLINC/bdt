@@ -223,3 +223,48 @@ def test_generated_acpc_bridge_name_is_parseable():
     xfm = parse_xfm_filename(written)
     assert xfm is not None, f'{written!r} does not parse as a BIDS transform'
     assert (xfm.frm, xfm.to, xfm.mode) == ('ACPC', 'T1w', 'image')
+
+
+def test_transform_filenames_are_parsed_by_pybids_not_a_bespoke_regex():
+    """Every filename shape BDT actually meets, including two that a regex missed.
+
+    The hand-rolled pattern failed twice: it required an underscore before ``from-``
+    (so a transform BDT generated itself, whose name *starts* with ``from-``, was
+    unparsable -- silently removing ACPC from the graph), and it required ``_xfm``
+    to follow ``mode-`` immediately (so every fMRIPrep transform qualified with
+    ``desc-coreg``/``desc-hmc`` was dropped, including boldref<->T1w).
+    """
+    # no subject prefix: BDT's own generated ACPC bridge
+    bridge = parse_xfm_filename('from-ACPC_to-T1w_mode-image_xfm.mat')
+    assert (bridge.frm, bridge.to, bridge.invertible) == ('ACPC', 'T1w', True)
+
+    # entities *after* mode-, as fMRIPrep writes them
+    coreg = parse_xfm_filename(
+        'sub-01_ses-1_task-rest_acq-mb_from-boldref_to-T1w_mode-image_desc-coreg_xfm.txt'
+    )
+    assert (coreg.frm, coreg.to, coreg.xfm_type) == ('boldref', 'T1w', 'affine')
+    hmc = parse_xfm_filename('sub-01_from-orig_to-boldref_mode-image_desc-hmc_xfm.txt')
+    assert (hmc.frm, hmc.to) == ('orig', 'boldref')
+
+    # and the things that must still be refused
+    assert parse_xfm_filename('sub-01_desc-preproc_bold.nii.gz') is None
+    assert parse_xfm_filename('sub-01_from-X_to-Y_mode-image_xfm.json') is None
+    assert parse_xfm_filename('sub-01_from-X_to-Y_mode-points_xfm.txt') is None
+
+
+def test_native_space_transform_chain_resolves_by_inverting_the_coregistration(tmp_path):
+    """T1w -> boldref: fMRIPrep ships only boldref -> T1w, which is affine.
+
+    This is the chain a native-space parcellation needs to warp a T1w-space atlas
+    onto the BOLD grid, and it exists only if the desc-coreg filename parses.
+    """
+    from bdt.transforms.graph import build_transform_graph
+    from bdt.transforms.queries import chain_for_image_resample
+
+    (tmp_path / 'sub-01_from-boldref_to-T1w_mode-image_desc-coreg_xfm.txt').touch()
+    graph = build_transform_graph([tmp_path])
+
+    assert graph.has_edge('boldref', 'T1w')
+    chain = chain_for_image_resample(graph, 'T1w', 'boldref')
+    assert len(chain) == 1
+    assert chain[0].invert is True

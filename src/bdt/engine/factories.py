@@ -71,6 +71,23 @@ _LABEL_SIDECAR_DROPPABLE = ('den', 'res')
 
 _ATLAS_EXTENSIONS = ('.nii.gz', '.dscalar.nii', '.dlabel.nii', '.nii')
 
+#: The space a derivative is in when it carries no ``space-`` entity at all.
+#:
+#: BIDS says an absent ``space-`` means the file is in its own modality's native
+#: space -- which is a *different* space for each modality, so two such files do
+#: not share a space merely by both being unlabelled.  Each name here is the one
+#: the preprocessor's own transforms use, so the transform graph can connect them:
+#: ``..._from-boldref_to-T1w_...`` (fMRIPrep), ``..._from-aslref_to-T1w_...``
+#: (ASLPrep).  ``dwi`` is deliberately absent -- QSIPrep's preprocessed output is
+#: ``space-ACPC`` and names it explicitly, so an unlabelled dwi is raw, with no
+#: agreed space name to give it; the geometry check in :func:`_warp_atlas_field`
+#: catches those instead of guessing.
+NATIVE_SPACE_BY_DATATYPE = {
+    'func': 'boldref',
+    'anat': 'T1w',
+    'perf': 'aslref',
+}
+
 
 def _atlas_labels_sidecar(path: str) -> str:
     """The BIDS labels TSV describing the atlas image at ``path``.
@@ -159,7 +176,32 @@ class FactoryContext:
         space = self._role_entity(node, role, 'space', None)
         if space is None:
             space = self._role_entity(node, role, 'template', None)
-        return default if space is None else space
+        if space is not None:
+            return space
+        if default is not None:
+            return default
+        # No ``space-`` at all means the file is in its modality's *own* native
+        # space, which differs per modality -- so two such files are not in the
+        # same space just because neither names one.  Resolving it here is what
+        # lets cross-space detection see the difference.
+        return NATIVE_SPACE_BY_DATATYPE.get(self.role_datatype(node, role))
+
+    def role_space_entity(self, node, role: str):
+        """The ``space`` **filename entity** feeding ``role``, for querying siblings.
+
+        Differs from :meth:`role_space` exactly where the space is implicit: that
+        one resolves an unlabelled file to its modality's native space (``boldref``)
+        so cross-space detection works, but no *filename* carries that as
+        ``space-boldref`` -- the sibling files are unlabelled too.  Querying for the
+        resolved name would match nothing, so this returns the pybids ``Query.NONE``
+        sentinel (the entity must be absent) instead.
+        """
+        space = self._role_entity(node, role, 'space', None)
+        if space is not None:
+            return space
+        from bids.layout import Query
+
+        return Query.NONE
 
     def role_session(self, node, role: str) -> str | None:
         """The session of the file feeding ``node``'s ``role`` (``None`` if the data
@@ -765,6 +807,66 @@ def _find_anatomical(context, space: str | None, session: str | None) -> str:
     )
 
 
+def _role_path(context, node, role: str) -> str | None:
+    """The on-disk path feeding ``role``, or ``None`` for a processing-node input."""
+    for up in node.inputs.get(role, []):
+        match = (context.resolved or {}).get(up)
+        if match is not None:
+            return match.path
+    return None
+
+
+def _assert_same_grid(node, context, data_role, atlas_space, data_space) -> None:
+    """Refuse to parcellate when no warp is planned but the grids disagree.
+
+    Reached whenever :func:`_warp_atlas_field` concludes "no warp needed", which
+    includes the case where one space could not be named at all.  Two files with no
+    common named space may still be perfectly parcellatable -- if they sit on the
+    same voxel grid, the space's *name* is irrelevant -- so geometry is the thing to
+    check, not the label.  Different grids without a named space is unrecoverable:
+    there is nothing to warp between, and nilearn would otherwise fail deep inside
+    the masker with a field-of-view error that names neither file.
+
+    Skipped when either side is a processing-node output, which does not exist yet
+    at build time.
+    """
+    import nibabel as nb
+
+    atlas_path = _role_path(context, node, 'atlas')
+    data_path = _role_path(context, node, data_role)
+    if not atlas_path or not data_path:
+        return
+    if not (atlas_path.endswith(('.nii', '.nii.gz')) and data_path.endswith(('.nii', '.nii.gz'))):
+        return  # CIFTI/surface geometry is not a voxel grid
+    try:
+        atlas_img = nb.load(atlas_path)
+        data_img = nb.load(data_path)
+    except Exception:  # unreadable here means unreadable later, with a better message
+        return
+
+    import numpy as np
+
+    same = atlas_img.shape[:3] == data_img.shape[:3] and np.allclose(
+        atlas_img.affine, data_img.affine, atol=1e-4
+    )
+    if same:
+        return
+    raise ValueError(
+        f'Node {getattr(node, "name", node)!r}: the atlas and the data on role '
+        f'{data_role!r} are on different voxel grids, but no warp can be planned '
+        f'because their spaces are {atlas_space!r} (atlas) and {data_space!r} (data).\n'
+        f'  atlas {atlas_path}\n'
+        f'        shape {atlas_img.shape[:3]}, zooms '
+        f'{tuple(round(float(z), 3) for z in atlas_img.header.get_zooms()[:3])}\n'
+        f'  data  {data_path}\n'
+        f'        shape {data_img.shape[:3]}, zooms '
+        f'{tuple(round(float(z), 3) for z in data_img.header.get_zooms()[:3])}\n'
+        'A file with no `space-` entity is in its own modality\'s native space; give '
+        'it one (or select a version already in the other\'s space) so the transform '
+        'graph can connect them.'
+    )
+
+
 def _warp_atlas_field(wf, node, context, inputnode, data_role):
     """The atlas source field for the parcellator, warped into the data's space when
     they differ (else ``(inputnode, 'atlas')``).
@@ -780,6 +882,7 @@ def _warp_atlas_field(wf, node, context, inputnode, data_role):
     data_space = context.role_space(node, data_role)
     cross_space = atlas_space is not None and data_space is not None and atlas_space != data_space
     if not cross_space:
+        _assert_same_grid(node, context, data_role, atlas_space, data_space)
         return (inputnode, 'atlas')
 
     atlas_suffix = context.role_suffix(node, 'atlas', default='dseg') or 'dseg'
@@ -886,7 +989,13 @@ def _discover_brain_mask(context, node, data_role: str) -> str:
     XCP-D's definition (|parcel n mask| / |parcel|).  A space with no usable mask is
     a spec problem to fix, so this raises with both attempted queries named.
     """
-    base = {'suffix': 'mask', 'desc': 'brain', 'space': context.role_space(node, data_role)}
+    # the filename entity, not the resolved logical space: a native-space mask sits
+    # beside a native-space BOLD and neither carries `space-`
+    base = {
+        'suffix': 'mask',
+        'desc': 'brain',
+        'space': context.role_space_entity(node, data_role),
+    }
     datatype = context.role_datatype(node, data_role)
     if datatype:
         base['datatype'] = datatype
