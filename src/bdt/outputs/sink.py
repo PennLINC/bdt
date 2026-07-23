@@ -22,7 +22,7 @@
 #
 """BIDS-derivative naming and the write sink.
 
-Composes BIDS filenames from short-name entity dicts in canonical order, applies
+Composes BIDS filenames from pybids-named entity dicts in canonical order, applies
 the ``desc`` prepend-compose rule, materializes a node's output plus its JSON
 sidecar, and raises on any two outputs that resolve to the same path.  Kept
 free of a pybids dependency so the naming logic is unit-testable on its own; the
@@ -36,7 +36,7 @@ import json
 import shutil
 from pathlib import Path
 
-# Canonical short-name entity order for BDT outputs.  ``sub``/``ses`` (participant)
+# Canonical entity order for BDT outputs.  ``subject``/``session`` (participant)
 # and ``space`` (folded into ``tpl-`` for dataset scope) form the leading token and
 # are handled separately in :meth:`DerivativeSink.relpath`.
 #
@@ -44,27 +44,32 @@ from pathlib import Path
 # ``atlas``/``stat``, per the 2026-07-16 decision (``space-fsLR_den-91k_atlas-…_stat-…``),
 # matching the refined story 3.1 outputs.  (``model``/``param`` placement for the
 # diffusion ``dwimap`` outputs is a story-3.2 question, revisited when those land.)
+# Entities are keyed throughout BDT by their **pybids entity name**, which is not
+# always the BIDS filename key: ``acquisition`` is written ``acq-``, ``session`` as
+# ``ses-``, ``statistic`` as ``stat-``.  Keying on the filename key instead meant the
+# lookups below silently missed every such entity, dropping acq-/rec-/dir-/ce- from
+# output names entirely.  Each pair is ``(entity name, filename key)``.
 ENTITY_ORDER = (
-    'sub',
-    'ses',
-    'task',
-    'acq',
-    'ce',
-    'rec',
-    'dir',
-    'run',
-    'model',
-    'param',
-    'hemi',
-    'space',
-    'res',
-    'den',
-    'atlas',
-    'seg',
-    'stat',
-    'scale',
-    'label',
-    'desc',
+    ('subject', 'sub'),
+    ('session', 'ses'),
+    ('task', 'task'),
+    ('acquisition', 'acq'),
+    ('ceagent', 'ce'),
+    ('reconstruction', 'rec'),
+    ('direction', 'dir'),
+    ('run', 'run'),
+    ('model', 'model'),
+    ('param', 'param'),
+    ('hemi', 'hemi'),
+    ('space', 'space'),
+    ('res', 'res'),
+    ('den', 'den'),
+    ('atlas', 'atlas'),
+    ('segmentation', 'seg'),
+    ('statistic', 'stat'),
+    ('scale', 'scale'),
+    ('label', 'label'),
+    ('desc', 'desc'),
 )
 
 
@@ -91,13 +96,13 @@ def bids_name(prefix: str, entities: dict, suffix: str, extension: str) -> str:
     """Build ``<prefix>[_<k>-<v> ...]_<suffix><extension>`` in canonical order.
 
     ``prefix`` is the leading token (``sub-01`` / ``sub-01_ses-1`` / ``tpl-fsLR``);
-    ``entities`` is a short-name dict (leading-token keys already removed).
+    ``entities`` is keyed by pybids entity name (leading-token keys already removed).
     ``extension`` includes its leading dot (e.g. ``.tsv``, ``.dscalar.nii``).
     """
     parts = [prefix]
-    for key in ENTITY_ORDER:
-        if key in entities and entities[key] is not None:
-            parts.append(f'{key}-{entities[key]}')
+    for name, key in ENTITY_ORDER:
+        if entities.get(name) is not None:
+            parts.append(f'{key}-{entities[name]}')
     stem = '_'.join(parts)
     return f'{stem}_{suffix}{extension}'
 
@@ -125,20 +130,20 @@ class DerivativeSink:
                 raise ValueError(
                     "Dataset-scope output requires a 'space' entity to form the tpl- folder."
                 )
-            for k in ('sub', 'ses'):
+            for k in ('subject', 'session'):
                 entities.pop(k, None)
             prefix = f'tpl-{space}'
             folder = prefix
         else:
-            sub = entities.get('sub')
+            sub = entities.get('subject')
             if not sub:
-                raise ValueError("Participant-scope output requires a 'sub' entity.")
-            ses = entities.get('ses')
+                raise ValueError("Participant-scope output requires a 'subject' entity.")
+            ses = entities.get('session')
             prefix_parts = [f'sub-{sub}'] + ([f'ses-{ses}'] if ses else [])
             prefix = '_'.join(prefix_parts)
             folder = f'sub-{sub}' + (f'/ses-{ses}' if ses else '')
-            # sub/ses are in the leading token; drop from mid-entities
-            entities = {k: v for k, v in entities.items() if k not in ('sub', 'ses')}
+            # subject/session are in the leading token; drop from mid-entities
+            entities = {k: v for k, v in entities.items() if k not in ('subject', 'session')}
         name = bids_name(prefix, entities, suffix, extension)
         return f'{folder}/{datatype}/{name}'
 

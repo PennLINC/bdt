@@ -179,6 +179,7 @@ def run_spec(
     plugin: str = 'Linear',
     plugin_args: dict | None = None,
     validate: bool = True,
+    bids_dir: str | Path | None = None,
 ) -> list[RunResult]:
     """Resolve, compile, and run ``spec``; return a :class:`RunResult` per scope.
 
@@ -210,6 +211,13 @@ def run_spec(
     work_dir = Path(work_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     work_dir.mkdir(parents=True, exist_ok=True)
+
+    from bdt.outputs.dataset_description import write_dataset_description
+
+    # Written once, up front, so the derivatives root is a valid BIDS-Derivative
+    # dataset (and the sidecar bids:<key>:... Sources URIs resolve) even if a
+    # later workflow crashes.
+    write_dataset_description(output_dir, datasets, bids_dir=bids_dir)
 
     if provider is None:
         from bdt.engine.pybids_provider import BIDSDataProvider

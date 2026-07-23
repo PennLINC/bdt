@@ -36,48 +36,20 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from bdt.engine.selection import Match, _matches
-
-# pybids entity name -> BDT short entity key.  Unlisted names pass through as-is.
-_SHORT = {
-    'subject': 'sub',
-    'session': 'ses',
-    'acquisition': 'acq',
-    'ceagent': 'ce',
-    'reconstruction': 'rec',
-    'direction': 'dir',
-    'run': 'run',
-    'task': 'task',
-    'suffix': 'suffix',
-    'extension': 'extension',
-    'datatype': 'datatype',
-    'space': 'space',
-    'desc': 'desc',
-    'den': 'den',
-    'density': 'den',
-    'res': 'res',
-    'resolution': 'res',
-    'hemi': 'hemi',
-    'atlas': 'atlas',
-    'segmentation': 'seg',
-    'label': 'label',
-    'model': 'model',
-    'param': 'param',
-    'statistic': 'stat',
-    'scale': 'scale',
-    'measure': 'meas',
-    'tract': 'tract',
-    'tracksys': 'track',
-    'threshold': 'thresh',
-    'template': 'tpl',
-    'cohort': 'cohort',
-}
+from bdt.engine.selection import Match, _matches, _query_name
 
 _ENTITY_CONFIG = str(Path(__file__).resolve().parent.parent / 'data' / 'bdt_entities.json')
 
 
-def _short_entities(entities: dict) -> dict:
-    return {_SHORT.get(k, k): v for k, v in entities.items()}
+def _as_query(value):
+    """Turn a serialized ``'Query.<NAME>'`` string into the pybids ``Query`` enum so
+    ``layout.get`` resolves presence filters; pass any other value through unchanged."""
+    name = _query_name(value)
+    if name is None or type(value).__name__ == 'Query':
+        return value
+    from bids.layout import Query
+
+    return getattr(Query, name)
 
 
 class BIDSDataProvider:
@@ -110,9 +82,10 @@ class BIDSDataProvider:
     ) -> list[Match]:
         layout = self._layout(dataset)
 
-        prefilter: dict = {}
-        if 'suffix' in filters:
-            prefilter['suffix'] = filters['suffix']
+        # pybids resolves ``Query`` presence sentinels natively, but only as the enum
+        # — a serialized ``'Query.ANY'`` string (from spec YAML) would match nothing.
+        prefilter = {k: _as_query(v) for k, v in filters.items()}
+
         # Only narrow by subject when the dataset is actually subject-indexed;
         # standard-space atlas datasets have no subjects and must ignore it.
         if subject is not None and layout.get_subjects():
@@ -121,13 +94,13 @@ class BIDSDataProvider:
         matches: list[Match] = []
         want_json = str(filters.get('extension', '')).endswith('json')
         for bidsfile in layout.get(return_type='object', **prefilter):
-            short = _short_entities(bidsfile.get_entities())
-            if not want_json and short.get('extension') == '.json':
+            entities = bidsfile.get_entities()
+            if not want_json and entities.get('extension') == '.json':
                 continue
-            if _matches(short, filters) and not any(
-                _matches(short, clause) for clause in (exclude or [])
+            if _matches(entities, filters) and not any(
+                _matches(entities, clause) for clause in (exclude or [])
             ):
-                matches.append(Match(path=bidsfile.path, entities=short))
+                matches.append(Match(path=bidsfile.path, entities=entities))
         return matches
 
     def relpath(self, dataset: str, path: str) -> str:

@@ -1,0 +1,89 @@
+nodes:
+# bundle tractograms (from a DSI Studio / GQI recon)
+# bundle-wise tck.gz files
+- name: load_bundles
+  action: select_data
+  dataset: qsirecon
+  filters:
+    model: gqi
+    # XXX: Query.ANY, Query.ALL, and Query.NONE should be converted to the PyBIDS objects before querying.
+    bundle: Query.ANY
+    suffix: streamlines
+    extension: .tck.gz
+    space: ACPC
+
+# inline atlas construction: TDI -> binarize -> dseg
+# this needs to aggregate bundle-wise files into a single pseg file
+- name: bundle_rois
+  action: tractogram_to_pseg
+  inputs:
+    tractograms: load_bundles
+    reference: load_fa  # an ACPC-space image defining the output voxel grid
+  parameters:
+    threshold: 0.0  # enables binarization to 4D dseg
+    # One .tck.gz per bundle, so there is no bundle-set entity to infer a label
+    # from; name it explicitly. Matches the bundles- entity QSIRecon puts on its
+    # own aggregate files (..._bundles-DSIStudio_scalarstats.tsv).
+    atlas: DSIStudio
+  write_outputs: true  # also emit the binarized bundle masks
+
+# CBF (ASLPrep) summarized over the bundle ROIs and along-tract
+- name: load_cbf
+  action: select_data
+  dataset: aslprep
+  filters:
+    space: MNI152NLin6Asym
+    suffix: cbf
+    extension: .nii.gz
+    # ASLPrep also writes desc-basil / basilGM / basilWM / score / scrub and two
+    # timeseries variants; desc-NONE pins the plain mean CBF map.
+    desc: Query.NONE
+- name: cbf_roi
+  action: parcellate_scalar
+  inputs:
+    scalar: load_cbf
+    atlas: bundle_rois  # warps ROI dseg -> CBF space
+  parameters:
+    statistics:
+      - mean
+      - standard_deviation
+  write_outputs: true
+- name: cbf_profile
+  action: parcellate_scalar_as_tract_profile
+  inputs:
+    scalar: load_cbf
+    bundles: load_bundles
+  parameters:
+    n_nodes: 100
+    # XXX: parcellate_scalar_as_tract_profile does not accept "statistics" parameter.
+  write_outputs: true
+
+# FA (QSIRecon tensor) — same two summaries
+- name: load_fa
+  action: select_data
+  dataset: qsirecon
+  filters:
+    suffix: dwimap
+    model: tensor
+    param: fa
+    space: ACPC
+    extension: .nii.gz
+- name: fa_roi
+  action: parcellate_scalar
+  inputs:
+    scalar: load_fa
+    atlas: bundle_rois
+  parameters:
+    statistics:
+      - mean
+      - standard_deviation
+  write_outputs: true
+- name: fa_profile
+  action: parcellate_scalar_as_tract_profile
+  inputs:
+    scalar: load_fa
+    bundles: load_bundles
+  parameters:
+    n_nodes: 100
+    # XXX: parcellate_scalar_as_tract_profile does not accept "statistics" parameter.
+  write_outputs: true

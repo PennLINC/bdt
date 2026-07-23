@@ -23,10 +23,13 @@
 """Pure-Python CIFTI / NIfTI tabular helpers.
 
 The numeric bits that are *not* a Connectome-Workbench call: reading a
-parcellated CIFTI into a TSV, parcellating a NIfTI with nilearn, and correlating
-a parcel-timeseries TSV.  Dependency-light (nibabel / nilearn / pandas) and
-unit-testable with small synthetic inputs.  The nipype action factories wrap
-these in ``Function`` nodes / ``SimpleInterface``\\ s.
+parcellated CIFTI into a TSV, and parcellating a NIfTI with nilearn.
+Dependency-light (nibabel / nilearn / pandas) and unit-testable with small
+synthetic inputs.  The nipype action factories wrap these in ``Function`` nodes
+/ ``SimpleInterface``\\ s.
+
+Correlating a parcel-timeseries TSV lives in XCP-D's vendored
+:class:`~bdt.interfaces.connectivity.TSVConnect`, not here.
 """
 
 from __future__ import annotations
@@ -47,6 +50,31 @@ _CIFTI_EXTENSIONS = (
 def is_cifti(path: str | Path) -> bool:
     """Whether a path is a CIFTI file (by its compound extension)."""
     return str(path).endswith(_CIFTI_EXTENSIONS)
+
+
+def is_cifti_probseg(path: str | Path) -> bool:
+    """Whether a CIFTI atlas is *probabilistic* (a dscalar) rather than a dlabel.
+
+    Decided by the header, not the filename: BDT's own ``restrict_atlas`` writes a
+    ``.dlabel.nii`` name regardless of what went in, so a dscalar probseg reaches
+    ``wb_command`` wearing a dlabel name and is rejected there with "input cifti
+    label file has the wrong mapping types".  A dlabel has a ``LabelAxis``; a
+    probseg has a ``ScalarAxis``, one map per region.
+    """
+    import os
+
+    import nibabel as nb
+
+    if not is_cifti(path):
+        return False
+    if not os.path.exists(str(path)):
+        # Not yet on disk (a build-time stub, or a path that will fail later anyway):
+        # fall back to the extension.  Safe here because the file inspected is always
+        # the original *selection*, whose name comes from the atlas dataset -- it is
+        # BDT's own derived copies that carry a misleading .dlabel.nii name.
+        return str(path).endswith('.dscalar.nii')
+    img = nb.load(str(path))
+    return not isinstance(img.header.get_axis(0), nb.cifti2.LabelAxis)
 
 
 def cifti_to_tsv(cifti_path: str | Path, out_path: str | Path) -> str:
@@ -90,14 +118,4 @@ def nifti_parcellate_to_tsv(
     timeseries = masker.fit_transform(str(data_path))  # (n_rows, n_regions)
     columns = [str(label) for label in masker.labels_]
     pd.DataFrame(timeseries, columns=columns).to_csv(out_path, sep='\t', index=False)
-    return str(out_path)
-
-
-def tsv_correlation(tsv_path: str | Path, out_path: str | Path) -> str:
-    """Pearson correlation matrix of a parcel-timeseries TSV -> a relmat TSV."""
-    import pandas as pd
-
-    df = pd.read_csv(tsv_path, sep='\t')
-    corr = df.corr(method='pearson')
-    corr.to_csv(out_path, sep='\t', index=False)
     return str(out_path)

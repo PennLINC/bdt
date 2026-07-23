@@ -72,6 +72,7 @@ def main(argv: list[str] | None = None) -> int:
             subjects=opts.participant_label or None,
             plugin=plugin,
             plugin_args=plugin_args,
+            bids_dir=opts.bids_dir,
         )
     except (SpecError, SelectionError, KeyError) as exc:
         # spec/validation and resolution errors are user errors -> a clean message

@@ -24,6 +24,8 @@
 gated end-to-end run on the real GRMPY test data when wb_command is present."""
 
 import importlib.util
+import json
+import os
 import shutil
 from pathlib import Path
 
@@ -69,7 +71,7 @@ def _two_task_provider():
                 Match(
                     '/x/sub-01_task-rest_bold.dtseries.nii',
                     {
-                        'sub': '01',
+                        'subject': '01',
                         'task': 'rest',
                         'suffix': 'bold',
                         'extension': '.dtseries.nii',
@@ -80,7 +82,7 @@ def _two_task_provider():
                 Match(
                     '/x/sub-01_task-nback_bold.dtseries.nii',
                     {
-                        'sub': '01',
+                        'subject': '01',
                         'task': 'nback',
                         'suffix': 'bold',
                         'extension': '.dtseries.nii',
@@ -232,7 +234,7 @@ def test_collision_detected_before_run(tmp_path):
         'extension': '.tsv',
         'datatype': 'func',
         'scope': 'participant',
-        'entities': {'sub': '01', 'atlas': 'A'},
+        'entities': {'subject': '01', 'atlas': 'A'},
     }
     plan = {'a': [OutputProduct(**same)], 'b': [OutputProduct(**same)]}
     with pytest.raises(ValueError, match='collision'):
@@ -273,7 +275,7 @@ def test_story_3_1_end_to_end_matches_xcpd(tmp_path):
     spec = parse_spec(STORY_3_1)
     # narrow to one run for a fast, single-combination check
     spec.by_name()['load_bold'].filters.update(
-        {'space': 'fsLR', 'desc': 'denoised', 'task': 'rest', 'acq': 'singleband'}
+        {'space': 'fsLR', 'desc': 'denoised', 'task': 'rest', 'acquisition': 'singleband'}
     )
     spec.by_name()['atlas_4s'].filters['extension'] = '.dlabel.nii'
     spec.by_name()['parcellate_bold'].parameters['min_coverage'] = 0.5
@@ -336,11 +338,11 @@ def test_parcellate_scalar_matches_xcpd_alff(tmp_path):
                     'dataset': 'xcpd',
                     'filters': {
                         'suffix': 'boldmap',
-                        'stat': 'alff',
+                        'statistic': 'alff',
                         'space': 'fsLR',
                         'den': '91k',
                         'task': 'rest',
-                        'acq': 'singleband',
+                        'acquisition': 'singleband',
                         'extension': '.dscalar.nii',
                     },
                     'exclude': [{'desc': 'smooth'}],
@@ -599,3 +601,47 @@ def test_surface_scalar_parcellation_end_to_end(tmp_path):
     # cortical parcels get thickness; subcortical parcels (no cortex data) are NaN
     assert 350 < finite.size < 456
     assert 1.0 < float(finite.mean()) < 4.0  # plausible cortical thickness (mm)
+
+
+def test_run_spec_writes_dataset_description(tmp_path):
+    """run_spec writes a derivative dataset_description.json before any workflow runs."""
+    from bdt.engine.pipeline import run_spec
+
+    ds = tmp_path / 'ds'
+    ds.mkdir()
+    bids = tmp_path / 'rawbids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+
+    spec = parse_spec(
+        {
+            'nodes': [
+                {
+                    'name': 'sel',
+                    'action': 'select_data',
+                    'dataset': 'ds',
+                    'filters': {'suffix': 'bold'},
+                }
+            ]
+        }
+    )
+    provider = DictDataProvider({'ds': []})  # matches nothing -> SelectionError
+
+    # The description is written up front; resolution then fails on the empty match.
+    with pytest.raises(SelectionError):
+        run_spec(
+            spec,
+            {'ds': str(ds)},
+            out,
+            tmp_path / 'work',
+            subjects=['01'],
+            provider=provider,
+            validate=False,
+            bids_dir=str(bids),
+        )
+
+    desc = json.loads((out / 'dataset_description.json').read_text())
+    assert desc['DatasetType'] == 'derivative'
+    assert desc['DatasetLinks']['ds'] == os.path.abspath(str(ds))
+    assert desc['DatasetLinks']['raw'] == os.path.abspath(str(bids))
+    assert desc['GeneratedBy'][0]['Name'] == 'BDT'

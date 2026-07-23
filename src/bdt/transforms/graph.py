@@ -39,24 +39,19 @@ stays free of a templateflow dependency).
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from pathlib import Path
 
 import networkx as nx
 
-# ``from-X_to-Y[_mode-image]_xfm.ext``.  ``mode`` is optional; spaces are BIDS
-# alphanumeric labels.  Extensions cover ITK composite (.h5), affine (.mat/.txt),
-# and displacement-field warps (.nii/.nii.gz).
-_XFM_RE = re.compile(
-    r'_from-(?P<frm>[A-Za-z0-9]+)_to-(?P<to>[A-Za-z0-9]+)'
-    r'(?:_mode-(?P<mode>[A-Za-z0-9]+))?'
-    r'_xfm\.(?P<ext>h5|mat|txt|nii\.gz|nii)$'
-)
+#: pybids entity config, shared with the data provider so transform filenames are
+#: parsed by exactly the same rules as every other BIDS file BDT reads.
+_ENTITY_CONFIG = str(Path(__file__).resolve().parent.parent / 'data' / 'bdt_entities.json')
 
 
 def _classify(ext: str) -> tuple[str, bool]:
     """Return ``(xfm_type, invertible)`` for a transform file extension."""
+    ext = ext.lstrip('.')
     if ext in ('mat', 'txt'):
         return 'affine', True
     if ext == 'h5':
@@ -117,21 +112,38 @@ def parse_xfm_filename(path: str | Path) -> Xfm | None:
 
     Returns ``None`` for names that are not BIDS ``from-/to-`` transforms, and for
     ``mode-points`` files (which are handled implicitly by the point-warp query).
+
+    Parsed by **pybids**, with the same entity config the data provider uses, rather
+    than by a bespoke regex.  Two bugs came from hand-rolling it: one required a
+    leading underscore before ``from-`` (so BDT could not read the transform it had
+    just written itself), and one required ``_xfm`` to follow ``mode-`` immediately
+    (so every fMRIPrep transform qualified with ``desc-coreg``/``desc-hmc`` was
+    silently dropped -- including boldref<->T1w, which native-space work depends on).
+    Filename grammar belongs to pybids; a filename it cannot parse is one BDT has no
+    business interpreting.
     """
+    from bids.layout import parse_file_entities
+
     path = Path(path)
-    m = _XFM_RE.search(path.name)
-    if m is None:
+    entities = parse_file_entities(path.name, config=['bids', 'derivatives', _ENTITY_CONFIG])
+    if entities.get('suffix') != 'xfm':
         return None
-    if m.group('mode') == 'points':
+    frm, to = entities.get('from'), entities.get('to')
+    if not frm or not to:
         return None
-    xfm_type, invertible = _classify(m.group('ext'))
+    if entities.get('mode') == 'points':
+        return None
+    extension = entities.get('extension') or path.suffix
+    if extension.lstrip('.') not in ('h5', 'mat', 'txt', 'nii', 'nii.gz'):
+        return None
+    xfm_type, invertible = _classify(extension)
     return Xfm(
         path=str(path),
-        frm=m.group('frm'),
-        to=m.group('to'),
+        frm=frm,
+        to=to,
         xfm_type=xfm_type,
         invertible=invertible,
-        mode=m.group('mode'),
+        mode=entities.get('mode'),
     )
 
 

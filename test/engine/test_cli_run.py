@@ -44,7 +44,14 @@ def test_cli_maps_args_to_run_spec(tmp_path, monkeypatch, capsys):
     captured = {}
 
     def fake_run_spec(
-        spec_arg, datasets, output_dir, work_dir, subjects=None, plugin='Linear', plugin_args=None
+        spec_arg,
+        datasets,
+        output_dir,
+        work_dir,
+        subjects=None,
+        plugin='Linear',
+        plugin_args=None,
+        bids_dir=None,
     ):
         captured.update(
             spec=spec_arg,
@@ -53,6 +60,7 @@ def test_cli_maps_args_to_run_spec(tmp_path, monkeypatch, capsys):
             work_dir=str(work_dir),
             subjects=subjects,
             plugin=plugin,
+            bids_dir=str(bids_dir),
         )
         return [RunResult(subject='125511', selections={}, outputs=[str(output_dir / 'x.tsv')])]
 
@@ -79,6 +87,7 @@ def test_cli_maps_args_to_run_spec(tmp_path, monkeypatch, capsys):
     assert captured['datasets'] == {'anat': str(ds)}  # ToDict + stringified
     assert captured['subjects'] == ['125511']
     assert captured['plugin'] == 'Linear'  # nprocs defaults to single-process
+    assert captured['bids_dir'] == str(bids)  # positional raw dataset threaded through
     assert 'work' in captured['work_dir']
     printed = capsys.readouterr().out
     assert 'finished' in printed
@@ -101,7 +110,14 @@ def test_cli_multiproc_when_nprocs_gt_1(tmp_path, monkeypatch):
     captured = {}
 
     def fake_run_spec(
-        spec_arg, datasets, output_dir, work_dir, subjects=None, plugin='Linear', plugin_args=None
+        spec_arg,
+        datasets,
+        output_dir,
+        work_dir,
+        subjects=None,
+        plugin='Linear',
+        plugin_args=None,
+        bids_dir=None,
     ):
         captured.update(plugin=plugin, plugin_args=plugin_args)
         return [RunResult(subject=None, selections={}, outputs=[])]

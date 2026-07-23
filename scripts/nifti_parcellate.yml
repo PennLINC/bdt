@@ -1,0 +1,88 @@
+dataset:
+- name: atlas_4s456
+  action: select_atlases
+  dataset: atlases
+  filters: {atlas: 4S456Parcels, template: MNI152NLin2009cAsym, extension: .nii.gz}
+- name: atlas_difumo
+  action: select_atlases
+  dataset: difumo
+  filters:
+    atlas: DiFuMo
+    scale: 64dimensions
+    template: MNI152NLin2009cAsym
+    suffix: probseg
+    extension: .nii.gz
+
+nodes:
+- name: load_bold
+  action: select_data
+  dataset: fmriprep
+  filters: {space: MNI152NLin6Asym, desc: preproc, suffix: bold, extension: .nii.gz}
+- name: load_cbf
+  action: select_data
+  dataset: aslprep
+  filters:
+    space: MNI152NLin6Asym
+    suffix: cbf
+    extension: .nii.gz
+    # ASLPrep also writes desc-basil / basilGM / basilWM / score / scrub and two
+    # timeseries variants; desc-NONE pins the plain mean CBF map.
+    desc: Query.NONE
+
+- name: parcellate_bold_4s456
+  action: parcellate_timeseries
+  inputs: {timeseries: load_bold, atlas: atlas_4s456}
+  parameters:
+    min_coverage: 0.5
+    statistics:
+    - mean
+    - sum
+    - median
+    - minimum
+    - maximum
+    - variance
+    - standard_deviation
+  write_outputs: true
+- name: fc_bold_4s456
+  action: functional_connectivity
+  inputs: {timeseries: parcellate_bold_4s456}
+  write_outputs: true
+- name: parcellate_cbf_4s456
+  action: parcellate_scalar
+  inputs:
+    scalar: load_cbf
+    atlas: atlas_4s456
+  parameters:
+    min_coverage: 0.5
+    statistics:
+    - mean
+    - sum
+    - median
+    - minimum
+    - maximum
+    - variance
+    - standard_deviation
+  write_outputs: true
+
+- name: parcellate_bold_difumo
+  action: parcellate_timeseries
+  inputs: {timeseries: load_bold, atlas: atlas_difumo}
+  parameters:
+    statistics:
+    - mean
+    - standard_deviation
+  write_outputs: true
+- name: fc_bold_difumo
+  action: functional_connectivity
+  inputs: {timeseries: parcellate_bold_difumo}
+  write_outputs: true
+- name: parcellate_cbf_difumo
+  action: parcellate_scalar
+  inputs:
+    scalar: load_cbf
+    atlas: atlas_difumo
+  parameters:
+    statistics:
+    - mean
+    - standard_deviation
+  write_outputs: true
