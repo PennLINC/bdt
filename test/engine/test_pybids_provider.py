@@ -28,7 +28,7 @@ import pytest
 
 pytest.importorskip('bids')
 
-from bdt.engine.pybids_provider import BIDSDataProvider
+from bdt.engine.pybids_provider import BIDSDataProvider  # noqa: E402
 
 
 def _make_dataset(root, files, derivative=True):
