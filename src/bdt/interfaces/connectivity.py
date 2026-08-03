@@ -41,6 +41,7 @@ from nipype.interfaces.base import (
 )
 
 from bdt.utils.filemanip import fname_presuffix
+from bdt.utils.images import as_float_img
 from bdt.utils.utils import get_col
 from bdt.utils.write_save import write_ndata
 
@@ -60,6 +61,16 @@ class _NiftiParcellateInputSpec(BaseInterfaceInputSpec):
             'Any parcels with lower coverage than the threshold will be replaced with NaNs. '
             'Must be a value between zero and one. '
             'Default is 0.5.'
+        ),
+    )
+    strategy = traits.Str(
+        'mean',
+        usedefault=True,
+        desc=(
+            "How to reduce a parcel's voxels at each timepoint; any nilearn "
+            'NiftiLabelsMasker strategy. Divergence from upstream XCP-D, which is '
+            'always the mean. Only this masker is affected -- the two coverage '
+            "maskers stay on 'sum', which is a voxel count, not a statistic."
         ),
     )
 
@@ -101,8 +112,20 @@ class NiftiParcellate(SimpleInterface):
         masker_lut = masker_lut.loc[masker_lut['index'].isin(atlas_values)].reset_index(drop=True)
 
         # Before anything, we need to measure coverage
+        # NOTE: deliberate divergence from upstream XCP-D, which uses np.uint8 here.
+        # `strategy='sum'` accumulates in the *input* dtype, so a uint8 image of ones
+        # wraps modulo 256: a parcel of 256 voxels sums to 0, one of 300 sums to 44.
+        # These are the counts forming the coverage denominator below, so coverage came
+        # out inf (0 denominator) or silently wrong (wrapped denominator), and
+        # `parcel_coverage < min_coverage` stopped meaning anything.
+        #
+        # Measured on nilearn 0.14.0 (true count -> uint8 result): 100 -> 100,
+        # 255 -> 255, 256 -> 0, 300 -> 44, 511 -> 255.  Note parcels of 255 voxels or
+        # fewer are correct, so a small test fixture will NOT reproduce this -- real
+        # atlas parcels are hundreds to thousands of voxels.  float32 accumulates
+        # exactly for the 0/1 values involved.
         atlas_img_bin = nb.Nifti1Image(
-            (atlas_img.get_fdata() > 0).astype(np.uint8),
+            (atlas_img.get_fdata() > 0).astype(np.float32),
             atlas_img.affine,
             atlas_img.header,
         )
@@ -113,7 +136,10 @@ class NiftiParcellate(SimpleInterface):
             background_label=0,
             mask_img=mask,
             smoothing_fwhm=None,
-            standardize=False,
+            # NOTE: deliberate divergence from upstream XCP-D, which uses standardize=False.
+            # nilearn 0.14.0 raises a FutureWarning for standardize=False; standardize=None
+            # is the non-deprecated equivalent.
+            standardize=None,
             strategy='sum',
             resampling_target=None,  # they should be in the same space/resolution already
             keep_masked_labels=True,
@@ -123,7 +149,10 @@ class NiftiParcellate(SimpleInterface):
             lut=masker_lut,
             background_label=0,
             smoothing_fwhm=None,
-            standardize=False,
+            # NOTE: deliberate divergence from upstream XCP-D, which uses standardize=False.
+            # nilearn 0.14.0 raises a FutureWarning for standardize=False; standardize=None
+            # is the non-deprecated equivalent.
+            standardize=None,
             strategy='sum',
             resampling_target=None,  # they should be in the same space/resolution already
             keep_masked_labels=True,
@@ -173,13 +202,19 @@ class NiftiParcellate(SimpleInterface):
             background_label=0,
             mask_img=mask,
             smoothing_fwhm=None,
-            standardize=False,
+            # NOTE: deliberate divergence from upstream XCP-D, which uses standardize=False.
+            # nilearn 0.14.0 raises a FutureWarning for standardize=False; standardize=None
+            # is the non-deprecated equivalent.
+            standardize=None,
+            strategy=self.inputs.strategy,
             resampling_target=None,  # they should be in the same space/resolution already
             keep_masked_labels=True,
         )
 
-        # Use nilearn to parcellate the file
-        timeseries_arr = masker.fit_transform(self.inputs.filtered_file)
+        # Use nilearn to parcellate the file.  as_float_img: nilearn reduces in the
+        # input dtype, so an integer-typed image would truncate every statistic and
+        # wrap `sum` outright.
+        timeseries_arr = masker.fit_transform(as_float_img(self.inputs.filtered_file))
         if timeseries_arr.ndim == 1:
             # Add singleton first dimension representing time.
             timeseries_arr = timeseries_arr[None, :]

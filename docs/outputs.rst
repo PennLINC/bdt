@@ -105,6 +105,34 @@ ALFF/falff/ReHo are ``stat-`` values on a derivative map (`BEP 012`_), not a
 dedicated suffix; anatomical morphometrics use the ``morph`` suffix with
 `BEP 011`_ columns; diffusion scalars carry ``model-``/``param-`` per `BEP 016`_.
 
+Whatever the suffix, the TSV is **tidy**: one row per parcel, a ``node`` column
+naming it, and one column per requested statistic, in the order the ``statistics``
+parameter lists them. This is the same shape as the along-tract profile tables,
+and it is the same for volumetric and grayordinate inputs.
+
+``parcellate_timeseries`` is the exception. Its table is wide (timepoints ×
+parcels), so a second statistic has nowhere to go as a column and each one gets
+its own file instead::
+
+    sub-<label>_..._atlas-<label>_stat-mean_timeseries.tsv
+    sub-<label>_..._atlas-<label>_stat-standarddeviation_timeseries.tsv
+
+The default ``statistics: [mean]`` therefore reproduces the single
+``stat-mean_timeseries.tsv`` that has always been written.
+
+A grayordinate ``parcellate_scalar`` additionally keeps its native parcellated
+CIFTIs, and since a pscalar holds a single value per parcel, there is **one file
+per statistic**, distinguished by ``stat-``. Where the source already carries a
+``stat-`` value it is composed with a ``+``::
+
+    sub-<label>_..._atlas-<label>_stat-alff+mean_boldmap.pscalar.nii
+    sub-<label>_..._atlas-<label>_stat-alff+standarddeviation_boldmap.pscalar.nii
+    sub-<label>_..._atlas-<label>_stat-alff_boldmap.tsv                  ← the one tidy table
+
+Statistic names are normalized to alphanumerics for the entity
+(``standard_deviation`` → ``standarddeviation``); the TSV *column* keeps the
+readable name.
+
 Streamlines
 ===========
 

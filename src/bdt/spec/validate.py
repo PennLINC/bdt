@@ -167,6 +167,24 @@ def _check_scope_lineage(node: Node, by_name: dict[str, Node], errors: list[str]
             )
 
 
+def _check_parameters(node: Node, errors: list[str]) -> None:
+    """Every key under ``parameters:`` must be one the action declares.
+
+    An unrecognised parameter used to be silently dropped, so a typo — or a
+    parameter set on the wrong action — did nothing at all and produced no
+    diagnostic, just missing or unexpected outputs.
+    """
+    accepted = node.action_spec.parameters
+    unknown = sorted(set(node.parameters) - set(accepted))
+    if not unknown:
+        return
+    known = ', '.join(sorted(accepted)) if accepted else 'none'
+    errors.append(
+        f'Node {node.name!r}: action {node.action!r} does not accept parameter(s) '
+        f'{", ".join(repr(k) for k in unknown)}. Accepted parameters: {known}.'
+    )
+
+
 def validate_spec(spec: Spec, datasets: set[str] | None = None) -> None:
     """Validate ``spec`` and raise :class:`SpecValidationError` if it is invalid.
 
@@ -197,6 +215,8 @@ def validate_spec(spec: Spec, datasets: set[str] | None = None) -> None:
             continue  # contract-dependent checks are meaningless without a spec
         # 3. selection/processing key usage
         _check_kind_keys(node, errors)
+        # 3b. parameters are recognised by the action
+        _check_parameters(node, errors)
         # 4. dataset key resolves
         if node.is_selection and node.dataset is not None and datasets is not None:
             if node.dataset not in datasets:

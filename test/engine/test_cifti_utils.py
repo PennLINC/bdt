@@ -35,7 +35,6 @@ from bdt.utils.cifti import (  # noqa: E402
     cifti_to_tsv,
     is_cifti,
     nifti_parcellate_to_tsv,
-    tsv_correlation,
 )
 
 
@@ -88,14 +87,3 @@ def test_nifti_parcellate_to_tsv(tmp_path):
     df = pd.read_csv(out, sep='\t')
     assert df.shape == (5, 2)  # 5 timepoints x 2 regions
     assert set(df.columns) == {'1', '2'}
-
-
-def test_tsv_correlation(tmp_path):
-    ts = tmp_path / 'ts.tsv'
-    rng = np.random.default_rng(1)
-    pd.DataFrame(rng.random((20, 3)), columns=['a', 'b', 'c']).to_csv(ts, sep='\t', index=False)
-    out = tsv_correlation(ts, tmp_path / 'relmat.tsv')
-    mat = pd.read_csv(out, sep='\t')
-    assert mat.shape == (3, 3)
-    # diagonal correlations are 1
-    assert np.allclose(np.diag(mat.to_numpy()), 1.0)

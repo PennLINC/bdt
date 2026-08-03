@@ -1,0 +1,67 @@
+nodes:
+- name: load_bold
+  action: select_data
+  dataset: fmriprep
+  filters:
+    space: Query.NONE  # boldref is implicit
+    desc: preproc
+    suffix: bold
+    extension: .nii.gz
+- name: load_icvf
+  action: select_data
+  dataset: qsirecon
+  filters:
+    space: ACPC
+    model: noddi
+    param: icvf  # XXX: Should be parameter (long-form)
+    suffix: dwimap
+    extension: .nii.gz
+    # bc there's a modulated version
+    desc: Query.NONE
+- name: load_dseg
+  action: select_atlases
+  dataset: fmriprep
+  filters:
+    space: Query.NONE  # T1w is implicit
+    reconstruction: refaced
+    desc: Query.NONE
+    suffix: dseg
+    extension: .nii.gz
+
+- name: parcellate_bold
+  action: parcellate_timeseries
+  inputs:
+    timeseries: load_bold
+    atlas: load_dseg
+  parameters:
+    min_coverage: 0.5
+    statistics:
+    - mean
+    - sum
+    - median
+    - minimum
+    - maximum
+    - variance
+    - standard_deviation
+  write_outputs: true
+- name: fc_bold
+  action: functional_connectivity
+  inputs:
+    timeseries: parcellate_bold
+  write_outputs: true
+- name: parcellate_icvf
+  action: parcellate_scalar
+  inputs:
+    scalar: load_icvf
+    atlas: load_dseg
+  parameters:
+    min_coverage: 0.5
+    statistics:
+    - mean
+    - sum
+    - median
+    - minimum
+    - maximum
+    - variance
+    - standard_deviation
+  write_outputs: true

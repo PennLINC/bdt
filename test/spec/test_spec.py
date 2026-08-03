@@ -250,8 +250,8 @@ STORY_3_4 = {
         },
         {
             'name': 'bundle_rois',
-            'action': 'tractogram_to_dseg',
-            'inputs': {'tractograms': 'load_bundles'},
+            'action': 'tractogram_to_pseg',
+            'inputs': {'tractograms': 'load_bundles', 'reference': 'load_fa'},
             'parameters': {'threshold': 0.0},
             'write_outputs': True,
         },
@@ -263,7 +263,7 @@ STORY_3_4 = {
         },
         {
             'name': 'cbf_roi',
-            'action': 'parcellate_scalar_as_roi',
+            'action': 'parcellate_scalar',
             'inputs': {'scalar': 'load_cbf', 'atlas': 'bundle_rois'},
             'write_outputs': True,
         },
@@ -282,7 +282,7 @@ STORY_3_4 = {
         },
         {
             'name': 'fa_roi',
-            'action': 'parcellate_scalar_as_roi',
+            'action': 'parcellate_scalar',
             'inputs': {'scalar': 'load_fa', 'atlas': 'bundle_rois'},
             'write_outputs': True,
         },
@@ -478,6 +478,56 @@ def test_unknown_action():
         {'nodes': [{'name': 'x', 'action': 'not_a_real_action', 'inputs': {'a': 'x'}}]},
         'unknown action',
     )
+
+
+def test_unknown_parameter_is_rejected():
+    """A parameter the action does not declare used to be silently dropped.
+
+    The motivating case: `statistics` set on an action that did not accept it ran
+    to completion and simply produced none of the requested outputs, with no
+    diagnostic anywhere.
+    """
+    _expect_error(
+        {
+            'nodes': [
+                {'name': 'a', 'action': 'select_atlases', 'dataset': 'atlases'},
+                {
+                    'name': 'b',
+                    'action': 'parcellate_timeseries',
+                    'inputs': {'timeseries': 'a', 'atlas': 'a'},
+                    'parameters': {'min_coverage': 0.5, 'statitsics': ['mean']},
+                },
+            ]
+        },
+        "does not accept parameter(s) 'statitsics'",
+    )
+
+
+def test_accepted_parameters_are_listed_in_the_error():
+    """The message must name the alternatives, so a typo is fixable from it alone."""
+    spec = parse_spec(
+        {
+            'nodes': [
+                {'name': 'a', 'action': 'select_atlases', 'dataset': 'atlases'},
+                {
+                    'name': 'b',
+                    'action': 'parcellate_timeseries',
+                    'inputs': {'timeseries': 'a', 'atlas': 'a'},
+                    'parameters': {'nonsense': 1},
+                },
+            ]
+        }
+    )
+    with pytest.raises(SpecValidationError) as exc:
+        validate_spec(spec)
+    message = next(e for e in exc.value.errors if 'nonsense' in e)
+    assert 'min_coverage' in message
+    assert 'statistics' in message
+
+
+def test_declared_parameters_are_accepted():
+    """Guard against the check being too strict -- the real spec must still pass."""
+    validate_spec(load_spec('scripts/nifti_parcellate.yml'))
 
 
 def test_duplicate_name():

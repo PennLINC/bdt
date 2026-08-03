@@ -3,6 +3,7 @@ _version.py
 .DS_Store
 .*.swp
 .ruff_cache
+crash*.pklz
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

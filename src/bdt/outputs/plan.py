@@ -43,12 +43,14 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from functools import partial
 
 from bdt.engine.selection import Match
 from bdt.outputs.provenance import bids_uri, build_sidecar, generated_by
 from bdt.outputs.sink import compose_desc
 from bdt.spec.model import Node, Spec
 from bdt.utils.cifti import is_cifti
+from bdt.utils.statistics import compose_statistic_entity, parse_statistics
 
 # How a product's bytes are derived from a node's ``outputnode.out``.
 PASSTHROUGH = 'passthrough'  # copy outputnode.out as-is (the native product)
@@ -90,6 +92,32 @@ def _atlas_label(node: Node, entities_by_node: dict[str, dict]) -> str | None:
             if up_ent.get('atlas'):
                 return up_ent['atlas']
     return None
+
+
+def _own_atlas_label(node: Node, base: dict) -> str:
+    """The ``atlas`` entity for a node that *builds* an atlas.
+
+    An explicit ``atlas`` parameter always wins.  Failing that, the label is
+    inferred from the source's **bundle-set** entity (``bundles-``), which exists
+    only when every streamline came from one aggregate file — e.g.
+    ``..._bundles-DSIStudio_streamlines.tck.gz`` gives ``atlas-DSIStudio``.
+
+    When the source is one file *per bundle* (``bundle-<Name>``, the QSIRecon
+    layout) there is no common set name to infer, so an explicit parameter is
+    required rather than guessed: the label ends up in every downstream filename.
+    """
+    explicit = node.parameters.get('atlas')
+    if explicit:
+        return str(explicit)
+    inferred = base.get('bundles')
+    if inferred:
+        return str(inferred)
+    raise ValueError(
+        f'Node {node.name!r} builds an atlas but its label cannot be inferred: the '
+        "source carries no 'bundles' (bundle-set) entity, which happens when there "
+        'is one file per bundle rather than a single aggregate file. Set it '
+        f'explicitly, e.g.\n  - name: {node.name}\n    parameters: {{atlas: MyAtlas}}'
+    )
 
 
 def _primary_upstream(node: Node) -> str | None:
@@ -141,14 +169,28 @@ def node_output_entities(spec: Spec, resolved: dict[str, Match]) -> dict[str, di
         if atlas is not None:
             base['atlas'] = atlas
 
+        # A node that *produces* an atlas has none to inherit, so it must name its
+        # own.  Otherwise every downstream parcellation is unlabelled and two atlases
+        # in one spec collide.
+        if aspec is not None and aspec.produces == 'atlas':
+            base['atlas'] = _own_atlas_label(node, base)
+            base.pop('bundle', None)  # a per-bundle label does not survive aggregation
+
+        # The real product suffix may be threshold-dependent (dynamic_suffix), e.g.
+        # tractogram_to_pseg -> dseg vs probseg.  Reflect it here so propagation and
+        # entity-driven factory decisions (e.g. warp interpolation) see the true
+        # suffix; build_sink_plan recomputes the same value for the sink name.
+        eff_suffix = out.suffix if out is not None else None
+        if out is not None and out.dynamic_suffix is not None:
+            eff_suffix = out.dynamic_suffix(node.parameters)
         if out is not None and not out.preserve_source:
             # A new-derivative-type action fixes its own suffix/datatype + entities.
-            base['suffix'] = out.suffix
+            base['suffix'] = eff_suffix
             base['datatype'] = out.datatype
             base.update(out.entities)
         elif out is not None:
             # Preserve the source's suffix/datatype (fall back to the spec's).
-            base.setdefault('suffix', out.suffix)
+            base.setdefault('suffix', eff_suffix)
             base.setdefault('datatype', out.datatype)
             base.update(out.entities)
 
@@ -182,9 +224,27 @@ def _produces_cifti(spec: Spec, resolved: dict[str, Match]) -> dict[str, bool]:
             if out is not None and out.output_is_cifti:
                 # dense CIFTI produced from a (per-hemi GIFTI) input regardless of format
                 flag[node.name] = True
+            elif _has_probabilistic_atlas(node, resolved):
+                # A probabilistic atlas has no crisp per-parcel membership, so there is
+                # no honest ParcelsAxis and the node writes tables instead.  This is the
+                # one place a CIFTI input does NOT yield a CIFTI product, and saying so
+                # here is what keeps everything downstream consistent: the plan drops the
+                # native product, and functional_connectivity correlates the TSV rather
+                # than handing a .tsv to wb_command -cifti-correlation.
+                flag[node.name] = False
             else:
                 flag[node.name] = flag.get(_primary_upstream(node), False)
     return flag
+
+
+def _has_probabilistic_atlas(node: Node, resolved: dict[str, Match]) -> bool:
+    """Whether ``node`` is parcellated by a *probabilistic* CIFTI (dscalar) atlas."""
+    from bdt.utils.cifti import is_cifti_probseg
+
+    return any(
+        (match := resolved.get(up)) is not None and is_cifti_probseg(match.path)
+        for up in node.inputs.get('atlas', [])
+    )
 
 
 def _selection_leaves(node: Node, by_name: dict[str, Node]) -> list[str]:
@@ -221,6 +281,59 @@ def _sources(
     return uris
 
 
+def _statistic_products(
+    requested: list[str],
+    mid: dict,
+    sidecar: dict,
+    common: dict,
+    source_statistic: str | None,
+    suffix: str,
+    extension: str,
+    derive: str = PASSTHROUGH,
+    field: str = 'out',
+) -> list[OutputProduct]:
+    """One product per requested statistic, or a single unlabelled one.
+
+    A file holding one value per parcel — a parcellated CIFTI, or a wide
+    (timepoints x parcels) TSV — can only carry a single statistic, so N statistics
+    mean N files distinguished by ``stat-``, each reading its own ``out_<stat>``
+    field.  ``requested`` is empty for actions that do not accept ``statistics``,
+    which then keep exactly one product named as before.
+
+    The per-node context comes in as explicit arguments rather than a closure:
+    ``build_sink_plan`` calls this from inside its node loop, and capturing loop
+    variables there is the classic late-binding trap (ruff B023).
+    """
+    if not requested:
+        return [
+            OutputProduct(
+                derive=derive,
+                suffix=suffix,
+                extension=extension,
+                entities=dict(mid),
+                sidecar=dict(sidecar),
+                source_field=field,
+                **common,
+            )
+        ]
+    products = []
+    for stat in requested:
+        stat_ent = dict(mid)
+        stat_ent['statistic'] = compose_statistic_entity(source_statistic, stat)
+        products.append(
+            OutputProduct(
+                derive=derive,
+                suffix=suffix,
+                extension=extension,
+                entities=stat_ent,
+                sidecar=dict(sidecar),
+                source_field=f'{field}_{stat}',
+                **common,
+            )
+        )
+    return products
+
+
 def build_sink_plan(
     spec: Spec,
     resolved: dict[str, Match],
@@ -255,6 +368,10 @@ def build_sink_plan(
         # explicit fields, so pull them out of the mid-filename entity dict.
         tsv_suffix = node_ent.pop('suffix', out.suffix)
         datatype = node_ent.pop('datatype', out.datatype)
+        # Threshold-aware (or otherwise parameter-driven) primary suffix.
+        primary_suffix = tsv_suffix
+        if out.dynamic_suffix is not None:
+            primary_suffix = out.dynamic_suffix(node.parameters)
         mid = node_ent
         # For a preserved source, the native CIFTI keeps the same suffix as the TSV.
         cifti_suffix = tsv_suffix if out.preserve_source else out.cifti_suffix
@@ -265,56 +382,76 @@ def build_sink_plan(
         products: list[OutputProduct] = []
         common = {'datatype': datatype, 'scope': node.scope}
 
-        if cifti_by_node.get(node.name) and cifti_suffix and out.cifti_extension:
-            # Native CIFTI product (ptseries/pconn/pscalar/dscalar).
-            products.append(
-                OutputProduct(
-                    derive=PASSTHROUGH,
-                    suffix=cifti_suffix,
-                    extension=out.cifti_extension,
-                    entities=dict(mid),
-                    sidecar=dict(sidecar),
-                    **common,
-                )
-            )
+        # A file that holds one value per parcel — a parcellated CIFTI, or a wide
+        # (timepoints x parcels) TSV — can only carry a single statistic, so N
+        # statistics mean N files distinguished by ``stat-``.  Actions that do not
+        # accept ``statistics`` keep exactly one product.  ``tsv_source_field`` marks
+        # the exception: that action already merged every statistic into one tidy
+        # table inside its sub-workflow, so its table is *not* multiplied.
+        requested = parse_statistics(node.parameters) if 'statistics' in aspec.parameters else []
+        merges_statistics = bool(out.tsv_source_field)
+        per_statistic = partial(
+            _statistic_products, requested, mid, sidecar, common, mid.get('statistic')
+        )
+
+        # ``_produces_cifti`` already answers False for a probabilistic-atlas node,
+        # so this covers both "the data was volumetric" and "the atlas was a probseg".
+        native_cifti = bool(cifti_by_node.get(node.name))
+        if native_cifti and cifti_suffix and out.cifti_extension:
+            products.extend(per_statistic(cifti_suffix, out.cifti_extension))
             # ... plus a flattened TSV for tabular (parcellated) outputs, but not for
             # a dense CIFTI (a resampled/mapped surface scalar has no table form).
             if out.emit_tsv:
-                products.append(
-                    OutputProduct(
-                        derive=CIFTI_TO_TSV,
-                        suffix=tsv_suffix,
-                        extension=out.extension,
-                        entities=dict(mid),
-                        sidecar=dict(sidecar),
-                        **common,
+                if merges_statistics:
+                    # One tidy table holding every statistic as a column; it keeps the
+                    # source's own ``statistic`` entity and is read straight off the
+                    # sub-workflow rather than converted here.
+                    products.append(
+                        OutputProduct(
+                            derive=PASSTHROUGH,
+                            suffix=tsv_suffix,
+                            extension=out.extension,
+                            entities=dict(mid),
+                            sidecar=dict(sidecar),
+                            source_field=out.tsv_source_field,
+                            **common,
+                        )
                     )
-                )
-        else:
-            # Volumetric / already-tabular: the primary (TSV) product only.
+                else:
+                    products.extend(per_statistic(tsv_suffix, out.extension, derive=CIFTI_TO_TSV))
+        elif merges_statistics:
+            # Volumetric, tidy: one table, every statistic a column.
             products.append(
                 OutputProduct(
                     derive=PASSTHROUGH,
-                    suffix=tsv_suffix,
+                    suffix=primary_suffix,
                     extension=out.extension,
                     entities=dict(mid),
                     sidecar=dict(sidecar),
                     **common,
                 )
             )
+        else:
+            # Volumetric / already-tabular: the primary product, per statistic.
+            products.extend(per_statistic(primary_suffix, out.extension))
 
         # Secondary products (e.g. the parcel-coverage map) from other outputnode fields.
         for ep in out.extra:
-            if ep.cifti_only and not cifti_by_node.get(node.name):
+            is_cifti_node = native_cifti
+            if not is_cifti_node and ep.cifti_only and ep.volumetric_extension is None:
                 continue
+            ep_extension = (
+                ep.extension if is_cifti_node else (ep.volumetric_extension or ep.extension)
+            )
             ep_ent = dict(mid)
             if ep.stat is not None:
-                ep_ent['stat'] = ep.stat
+                ep_ent['statistic'] = ep.stat
+            ep_suffix = primary_suffix if ep.match_primary_suffix else ep.suffix
             products.append(
                 OutputProduct(
                     derive=PASSTHROUGH,
-                    suffix=ep.suffix,
-                    extension=ep.extension,
+                    suffix=ep_suffix,
+                    extension=ep_extension,
                     entities=ep_ent,
                     sidecar=dict(sidecar),
                     source_field=ep.source_field,
