@@ -256,7 +256,10 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--input', type=Path, default=DEFAULT_INPUT, help='4D MNI2009c atlas.')
     parser.add_argument(
-        '--output', type=Path, default=DEFAULT_OUTPUT, help='Output fsLR-91k dscalar.'
+        '--output',
+        type=Path,
+        default=DEFAULT_OUTPUT,
+        help='Output fsLR-91k dscalar.',
     )
     parser.add_argument(
         '--cifti-template',
