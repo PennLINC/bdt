@@ -6,7 +6,6 @@ nodes:
   dataset: qsirecon
   filters:
     model: gqi
-    # XXX: Query.ANY, Query.ALL, and Query.NONE should be converted to the PyBIDS objects before querying.
     bundle: Query.ANY
     suffix: streamlines
     extension: .tck.gz

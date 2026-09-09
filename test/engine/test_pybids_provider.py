@@ -113,10 +113,10 @@ def test_exclude(datasets):
     assert models == ['tensor']
 
 
-def test_query_any_requires_entity_present(datasets):
+@pytest.mark.parametrize('query_value', ['Query.ANY', 'Query.ALL'])
+def test_query_value_requires_entity_present(datasets, query_value):
     p = BIDSDataProvider(datasets)
-    # 'Query.ANY' (the serialized spec-YAML form) selects every bundle-tagged file.
-    matches = p.select('qsirecon', {'suffix': 'streamlines', 'bundle': 'Query.ANY'}, subject='01')
+    matches = p.select('qsirecon', {'suffix': 'streamlines', 'bundle': query_value}, subject='01')
     assert sorted(m.entities['bundle'] for m in matches) == ['AF', 'CST']
 
 
@@ -126,6 +126,20 @@ def test_query_none_requires_entity_absent(datasets):
     matches = p.select('qsirecon', {'suffix': 'streamlines', 'bundle': 'Query.NONE'}, subject='01')
     assert len(matches) == 1
     assert 'bundle' not in matches[0].entities
+
+
+@pytest.mark.parametrize(
+    ('query_value', 'expected_bundles'),
+    [('Query.ANY', ['AF', 'CST']), ('Query.NONE', [None])],
+)
+def test_query_values_in_lists_are_translated(datasets, query_value, expected_bundles):
+    p = BIDSDataProvider(datasets)
+    matches = p.select(
+        'qsirecon',
+        {'suffix': 'streamlines', 'bundle': [query_value]},
+        subject='01',
+    )
+    assert sorted(m.entities.get('bundle') for m in matches) == expected_bundles
 
 
 def test_relpath_and_subjects(datasets):
