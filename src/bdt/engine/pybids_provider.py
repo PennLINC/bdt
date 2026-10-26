@@ -42,14 +42,20 @@ _ENTITY_CONFIG = str(Path(__file__).resolve().parent.parent / 'data' / 'bdt_enti
 
 
 def _as_query(value):
-    """Turn a serialized ``'Query.<NAME>'`` string into the pybids ``Query`` enum so
-    ``layout.get`` resolves presence filters; pass any other value through unchanged."""
+    """Translate serialized ``Query`` values to pybids enums, including lists."""
+    if isinstance(value, list):
+        return [_as_query(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_as_query(item) for item in value)
+    if isinstance(value, set):
+        return {_as_query(item) for item in value}
+
     name = _query_name(value)
     if name is None or type(value).__name__ == 'Query':
         return value
     from bids.layout import Query
 
-    return getattr(Query, name)
+    return getattr(Query, 'REQUIRED' if name in {'ANY', 'ALL'} else name)
 
 
 class BIDSDataProvider:

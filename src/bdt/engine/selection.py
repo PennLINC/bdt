@@ -119,6 +119,10 @@ def _query_name(want) -> str | None:
 def _matches(entities: dict, query: dict) -> bool:
     for key, want in (query or {}).items():
         have = entities.get(key)
+        if isinstance(want, (list, tuple, set)):
+            if not any(_matches(entities, {key: value}) for value in want):
+                return False
+            continue
         qname = _query_name(want)
         if qname is not None:
             present = key in entities and have is not None
@@ -130,10 +134,7 @@ def _matches(entities: dict, query: dict) -> bool:
             elif not present:  # ANY / REQUIRED / ALL: entity must be present
                 return False
             continue
-        if isinstance(want, (list, tuple, set)):
-            if have not in {str(w) for w in want} and have not in want:
-                return False
-        elif str(have) != str(want):
+        if str(have) != str(want):
             return False
     return True
 
